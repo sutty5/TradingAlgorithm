@@ -1,5 +1,5 @@
 //@version=6
-strategy("Golden Protocol v5.0 [Einstein Strategy]", overlay=true, initial_capital=50000, default_qty_type=strategy.fixed, default_qty_value=1, currency=currency.USD, max_labels_count=500)
+strategy("Golden Protocol v5.0 [Einstein Strategy]", overlay=true, initial_capital=1000000, default_qty_type=strategy.fixed, default_qty_value=1, currency=currency.USD, max_labels_count=500, process_orders_on_close=true, calc_on_order_fills=true)
 
 // -----------------------------------------------------------------------------
 // 🧠 GOLDEN PROTOCOL v5.0 "EINSTEIN PURE ALPHA" (STRATEGY EDITION)
@@ -24,8 +24,8 @@ t_target = input.float(0.0, "Target Fib (Impulse)", group=grp_params)
 sym_es = input.symbol("CME_MINI:ES1!", "ES Symbol (for Correlation)", group="Data")
 
 // --- DATA FETCHING ---
-es_open = request.security(sym_es, timeframe.period, open)
-es_close = request.security(sym_es, timeframe.period, close)
+es_open = request.security(sym_es, timeframe.period, open, lookahead=barmerge.lookahead_off)
+es_close = request.security(sym_es, timeframe.period, close, lookahead=barmerge.lookahead_off)
 
 // --- HELPER FUNCTIONS ---
 get_direction(o, c) =>
