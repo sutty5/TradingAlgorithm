@@ -50,6 +50,8 @@
 *   `optimizer_v49_deep.py`: Heavy duty optimizer (Multi-TF, Multi-Asset).
 *   `verify_v5_stats.py`: Verification script used to confirm v5.0 stats.
 *   `tradingview/golden_protocol_v5_0.pine`: **Official Strategy Script** (v6) for TradingView (Manual + Backtest).
+*   `check_alpaca_status.py`: Monitor Alpaca Equity/Positions/Orders from CLI.
+*   `alpaca_paper_trader.py`: **Live Bot** (Railway Ready) - QQQ/SPY Proxy.
 
 ### 📊 Data Sources
 *   **Primary:** `data/databento_trades/trades_es_nq_2025-09-21_2025-12-20.dbn` (Do not delete).
@@ -89,3 +91,8 @@
         *   Deployed `alpaca_paper_trader.py` locally.
         *   Setup: QQQ (NQ Proxy) + SPY (ES Proxy) on Alpaca Paper (IEX Feed).
         *   Status: **LIVE MONITORING** (Waiting for Market Open).
+    *   **2025-12-22 (Phase 1 Launch - Day 1 Result):**
+        *   Deployed `alpaca_paper_trader.py` to Railway.
+        *   **First Trade:** Successful Short (SELL) -> Limit Buy Coverage.
+        *   **Update:** Implemented **Dynamic Risk Sizing** ($400 USD Risk per trade).
+        *   **Status:** **LIVE & MONITORING** 🟢
