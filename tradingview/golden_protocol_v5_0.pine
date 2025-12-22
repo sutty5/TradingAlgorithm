@@ -123,9 +123,9 @@ if state == "SWEEP"
             // Wait, Python logic used "nq.low" of the BOS candle as Fib 0.
             fib_0 = low
             fib_1 = sweep_extreme
-            range = math.abs(fib_1 - fib_0)
+            fib_range = math.abs(fib_1 - fib_0)
             
-            entry_price = fib_0 + (range * t_entry)
+            entry_price = fib_0 + (fib_range * t_entry)
             stop_price = fib_1
             target_price = fib_0
             
