@@ -33,8 +33,13 @@ FIB_STOP = 1.0
 FIB_TARGET = 0.0
 # NQ Proxy = QQQ
 # ES Proxy = SPY
+# NQ Proxy = QQQ
+# ES Proxy = SPY
 SYMBOL_NQ = "QQQ" 
 SYMBOL_ES = "SPY"
+
+# Position Management
+RISK_PER_TRADE = 400.0 # USD to risk per trade
 
 logging.basicConfig(
     level=logging.INFO,
@@ -223,20 +228,33 @@ class GoldenProtocolLive:
             
             # CALC LEVELS
             fib_1 = self.setup['sweep_extreme'] # Stop
-            fib_0 = nq.low # Impulse Low (Target) -- Wait, trailing?
-            # For simplicity in Phase 1: Use BOS Low as "Impulse Low"
-            # Ideally this tracks live, but for "Open Candle" entry we calculate now.
+            fib_0 = nq.low # Impulse Low (Target)
             
             fib_range = abs(fib_1 - fib_0)
             entry = fib_0 + (fib_range * FIB_ENTRY)
             stop = fib_1
             target = fib_0 # 0.0 Fib
             
+            # --- DYNAMIC POSITION SIZING ---
+            # Risk Per Share = |Entry - Stop|
+            risk_per_share = abs(entry - stop)
+            
+            # Safety: Prevent div by zero if range is extremely small (unlikely with filters)
+            if risk_per_share < 0.01:
+                qty = 1
+                logger.warning(f"Risk per share too small (${risk_per_share:.4f}). Defaulting to 1 share.")
+            else:
+                qty = int(RISK_PER_TRADE / risk_per_share)
+            
+            # Calculate Total Size for logging
+            total_size_usd = qty * entry
+            logger.info(f"💎 SIZING: Risk ${RISK_PER_TRADE} | Risk/Share ${risk_per_share:.2f} | Qty {qty} | Total ${total_size_usd:,.2f}")
+            
             # Construct Signal
             signal = {
                 'symbol': SYMBOL_NQ,
                 'side': OrderSide.SELL,
-                'qty': 1, # QQQ Share
+                'qty': qty,
                 'entry': round(entry, 2),
                 'stop': round(stop, 2),
                 'target': round(target, 2)
@@ -244,7 +262,7 @@ class GoldenProtocolLive:
             logger.info(f"🚀 FIRING SIGNAL: {signal}")
             
             # Reset after firing
-            self.state = TradeState.FILLED # Assume fill management handled by Alpaca
+            self.state = TradeState.FILLED 
             return signal
             
         return None
