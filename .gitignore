@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+data/
+*.csv
+*.png
+.gemini/
+.agent/
+wandb/
