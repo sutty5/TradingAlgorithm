@@ -172,24 +172,33 @@ if barstate.islast
     table.cell(info_table, 0, 4, "Target (0.0)", bgcolor=color.green, text_color=color.white)
     table.cell(info_table, 1, 4, str.tostring(pending_target, "#.##"), bgcolor=color.white, text_color=color.black)
 
-// PPI Markers
-plotshape(state == "PPI" and candles_since_ppi == 0, "PPI", shape.diamond, location.top, color.yellow, size=size.tiny)
-plotshape(state == "SWEEP", "Sweep", shape.triangledown, location.abovebar, color.orange, size=size.tiny)
+strategy("Golden Protocol v5.0 [Einstein Strategy]", overlay=true, initial_capital=1000000, default_qty_type=strategy.fixed, default_qty_value=1, currency=currency.USD, max_labels_count=500)
+
+// ... (Rest of script remains same)
 
 // -----------------------------------------------------------------------------
 // DEBUGGING
 // -----------------------------------------------------------------------------
-var table debug_tbl = table.new(position.bottom_right, 2, 6, border_width=1)
+var table debug_tbl = table.new(position.bottom_right, 2, 8, border_width=1)
 if barstate.islast
     table.cell(debug_tbl, 0, 0, "State", bgcolor=color.gray)
     table.cell(debug_tbl, 1, 0, state, bgcolor=color.black, text_color=color.white)
     
-    table.cell(debug_tbl, 0, 1, "NQ Dir", bgcolor=color.gray)
-    table.cell(debug_tbl, 1, 1, str.tostring(nq_dir), bgcolor=color.black, text_color=color.white)
+    table.cell(debug_tbl, 0, 1, "Candles Since", bgcolor=color.gray)
+    table.cell(debug_tbl, 1, 1, str.tostring(candles_since_ppi), bgcolor=color.black, text_color=color.white)
     
-    table.cell(debug_tbl, 0, 2, "ES Dir", bgcolor=color.gray)
-    table.cell(debug_tbl, 1, 2, str.tostring(es_dir), bgcolor=color.black, text_color=color.white)
+    table.cell(debug_tbl, 0, 2, "Price / PPI Low", bgcolor=color.gray)
+    table.cell(debug_tbl, 1, 2, str.tostring(close, "#.##") + " / " + str.tostring(ppi_low, "#.##"), bgcolor=color.black, text_color=color.white)
     
-    table.cell(debug_tbl, 0, 3, "Valid ES Data?", bgcolor=color.gray)
-    table.cell(debug_tbl, 1, 3, str.tostring(not na(es_close)), bgcolor=not na(es_close) ? color.green : color.red)
+    table.cell(debug_tbl, 0, 3, "Pending Entry", bgcolor=color.gray)
+    table.cell(debug_tbl, 1, 3, str.tostring(pending_entry, "#.##"), bgcolor=color.black, text_color=color.white)
+
+    table.cell(debug_tbl, 0, 4, "NQ Dir", bgcolor=color.gray)
+    table.cell(debug_tbl, 1, 4, str.tostring(nq_dir), bgcolor=color.black, text_color=color.white)
+    
+    table.cell(debug_tbl, 0, 5, "ES Dir", bgcolor=color.gray)
+    table.cell(debug_tbl, 1, 5, str.tostring(es_dir), bgcolor=color.black, text_color=color.white)
+    
+    table.cell(debug_tbl, 0, 6, "Valid ES Data?", bgcolor=color.gray)
+    table.cell(debug_tbl, 1, 6, str.tostring(not na(es_close)), bgcolor=not na(es_close) ? color.green : color.red)
 
