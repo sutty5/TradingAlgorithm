@@ -91,7 +91,18 @@ if state == "PPI"
 
 // STATE: SWEEP
 if state == "SWEEP"
-    if sweep_type == "SHORT"
+    candles_since_ppi += 1 // Use same counter or new? Let's use same for simplicity or reset it?
+    // Actually, distinct counter is better.
+    
+    // Invalidation: If price closes ABOVE the Sweep High, it's not a sweep, it's a breakout.
+    if close > sweep_extreme
+        state := "SCANNING"
+        
+    // Timeout: If we don't get BOS within 12 bars of Sweep, give up.
+    else if candles_since_ppi > 24 // Give it some room (12 for PPI + 12 for BOS)
+        state := "SCANNING"
+    
+    else if sweep_type == "SHORT"
         if close < ppi_low
             // BOS Confirmed! Signal!
             // Calculate Fib Levels
