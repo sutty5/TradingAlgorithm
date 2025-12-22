@@ -49,6 +49,7 @@
     *   *Critical:* Ensures correct Fib calculation and candle-close confirmation.
 *   `optimizer_v49_deep.py`: Heavy duty optimizer (Multi-TF, Multi-Asset).
 *   `verify_v5_stats.py`: Verification script used to confirm v5.0 stats.
+*   `tradingview/golden_protocol_v5_0.pine`: **Official Strategy Script** (v6) for TradingView (Manual + Backtest).
 
 ### 📊 Data Sources
 *   **Primary:** `data/databento_trades/trades_es_nq_2025-09-21_2025-12-20.dbn` (Do not delete).
