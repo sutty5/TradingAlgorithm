@@ -164,3 +164,21 @@ if barstate.islast
 // PPI Markers
 plotshape(state == "PPI" and candles_since_ppi == 0, "PPI", shape.diamond, location.top, color.yellow, size=size.tiny)
 plotshape(state == "SWEEP", "Sweep", shape.triangledown, location.abovebar, color.orange, size=size.tiny)
+
+// -----------------------------------------------------------------------------
+// DEBUGGING
+// -----------------------------------------------------------------------------
+var table debug_tbl = table.new(position.bottom_right, 2, 6, border_width=1)
+if barstate.islast
+    table.cell(debug_tbl, 0, 0, "State", bgcolor=color.gray)
+    table.cell(debug_tbl, 1, 0, state, bgcolor=color.black, text_color=color.white)
+    
+    table.cell(debug_tbl, 0, 1, "NQ Dir", bgcolor=color.gray)
+    table.cell(debug_tbl, 1, 1, str.tostring(nq_dir), bgcolor=color.black, text_color=color.white)
+    
+    table.cell(debug_tbl, 0, 2, "ES Dir", bgcolor=color.gray)
+    table.cell(debug_tbl, 1, 2, str.tostring(es_dir), bgcolor=color.black, text_color=color.white)
+    
+    table.cell(debug_tbl, 0, 3, "Valid ES Data?", bgcolor=color.gray)
+    table.cell(debug_tbl, 1, 3, str.tostring(not na(es_close)), bgcolor=not na(es_close) ? color.green : color.red)
+
