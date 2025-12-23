@@ -124,10 +124,10 @@ other_open  = request.security(other_ticker_id, timeframe.period, open,  lookahe
 has_data_my    = not na(close) and not na(open)
 has_data_other = not na(other_close) and not na(other_open)
 
-// Doji Filter: To have a "Color", body must be > 0.25 tick (filter out noise)
+// Doji Filter: To have a "Color", body must be > 2 ticks (filter out 1-tick chop/noise)
 min_tick = syminfo.mintick
-is_doji_my    = math.abs(close - open) <= (min_tick * 0.25)
-is_doji_other = math.abs(other_close - other_open) <= (min_tick * 0.25)
+is_doji_my    = math.abs(close - open) <= (min_tick * 2.0)
+is_doji_other = math.abs(other_close - other_open) <= (min_tick * 2.0)
 
 my_green    = close > open
 other_green = other_close > other_open
