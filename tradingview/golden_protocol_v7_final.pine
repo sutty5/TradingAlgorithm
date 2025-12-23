@@ -155,17 +155,6 @@ f_dbg_label(txt, y, color_) =>
     if debug_mode
         label.new(bar_index, y, txt, color=color_, style=label.style_label_down, textcolor=color.white, size=size.small)
 
-// DEBUG: Filter Bypass & Labels
-debug_mode = input.bool(false, "🐞 Debug Mode (Show All Sweeps)", group=grp_gen)
-if debug_mode
-    c_wick_min := 0.0
-    c_atr_max := 0.0
-    c_macro := false // Bypass macro
-
-// Helper: Debug Label
-f_dbg_label(txt, y, color_) =>
-    if debug_mode
-        label.new(bar_index, y, txt, color=color_, style=label.style_label_down, textcolor=color.white, size=size.small)
 
 // 3. SWEEP IDENTIFICATION
 // Look for wicks beyond PPI High/Low that CLOSE inside.
