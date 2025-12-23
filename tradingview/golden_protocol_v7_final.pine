@@ -115,8 +115,10 @@ else if is_es
 // Final Selection
 other_ticker_id = i_other_ticker != "" ? i_other_ticker : auto_other
 
-other_close = request.security(other_ticker_id, timeframe.period, close)
-other_open  = request.security(other_ticker_id, timeframe.period, open)
+// CRITICAL FIX: Use gaps_on and lookahead_off to ensure we get REAL closed data from the other ticker.
+// Also, we must compare the SAME BAR INDEX. 
+other_close = request.security(other_ticker_id, timeframe.period, close, lookahead=barmerge.lookahead_off)
+other_open  = request.security(other_ticker_id, timeframe.period, open, lookahead=barmerge.lookahead_off)
 
 my_green    = close > open
 other_green = other_close > other_open
@@ -490,14 +492,18 @@ if show_tutor and barstate.islast
     tf_color  = color.green
     bool is_wrong = false
 
-    if is_es and tf_mins != 2
-        tf_status = "⛔ WRONG TF! USE 2m"
-        tf_color := color.red
-        is_wrong := true
-    else if is_nq and tf_mins != 5
-        tf_status = "⛔ WRONG TF! USE 5m"
-        tf_color := color.red
-        is_wrong := true
+    // ES allows 2m (Validator) AND 5m (Optimizer)
+    // NQ allows 5m (Banker)
+    if is_es 
+        if tf_mins != 2 and tf_mins != 5
+            tf_status = "⛔ WRONG TF! USE 2m or 5m"
+            tf_color := color.red
+            is_wrong := true
+    else if is_nq 
+        if tf_mins != 5
+            tf_status = "⛔ WRONG TF! USE 5m"
+            tf_color := color.red
+            is_wrong := true
 
     if is_wrong
         label.new(bar_index, high, "⚠️ STOP TRADING ⚠️\nWRONG TIMEFRAME\nSWITCH TO: " + (is_es ? "2 min" : "5 min"), color=color.new(color.red, 10), textcolor=color.white, style=label.style_label_down, size=size.huge)
