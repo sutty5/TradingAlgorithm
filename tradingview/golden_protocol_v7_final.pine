@@ -98,14 +98,6 @@ if use_auto
         c_mode_name := "⚠️ NO GOD MODE CONFIG"
 
 // =============================================================================
-// 🎨 VISUALS
-// =============================================================================
-
-// Plot PPI with Enhanced Visibility
-plotshape(ppi_high, "PPI High", shape.grouponcircles, location.absolute, color.new(color.red, 30), size=size.tiny, offset=0)
-plotshape(ppi_low, "PPI Low", shape.grouponcircles, location.absolute, color.new(color.green, 30), size=size.tiny, offset=0)
-
-// =============================================================================
 // 🧠 CORE STRATEGY LOGIC
 // =============================================================================
 
@@ -454,6 +446,14 @@ if show_fibs
 
         // ZONE
         b_zone := box.new(x1, y_pivot, bar_index + 5, y_stop, border_color=color(na), bgcolor=c_bg)
+
+// =============================================================================
+// 🎨 VISUALS
+// =============================================================================
+
+// Plot PPI with Enhanced Visibility (Diamonds)
+plotshape(ppi_high, "PPI High", shape.diamond, location.absolute, color.new(color.red, 20), size=size.tiny, offset=0)
+plotshape(ppi_low, "PPI Low", shape.diamond, location.absolute, color.new(color.green, 20), size=size.tiny, offset=0)
 
 // Dashboard
 var table dash = table.new(position.top_right, 2, 7, bgcolor=color.new(color.black, 40))
