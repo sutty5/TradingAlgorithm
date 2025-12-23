@@ -264,10 +264,6 @@ if ppi_age > 0 and ppi_age <= 12
                     f_dbg_label("✅ SWEEP ACCEPTED", high, color.green)
             else if debug_mode
                 f_dbg_label("🚫 DIR FAIL (Mode: " + c_mode_name + ")", high, color.orange)
-                if debug_mode
-                    f_dbg_label("✅ SWEEP ACCEPTED", high, color.green)
-            else if debug_mode
-                f_dbg_label("🚫 DIR FAIL (Mode: " + c_mode_name + ")", high, color.orange)
 
 // 4. BOS (Break of Structure) & ENTRY
 // We wait for a CLOSE beyond the opposite PPI level.
