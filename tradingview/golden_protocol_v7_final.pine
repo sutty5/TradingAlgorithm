@@ -1,0 +1,320 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © SuttyTrading
+
+//@version=6
+strategy("Golden Protocol v7.1 [GOD MODE]", overlay=true, initial_capital=50000, default_qty_type=strategy.fixed, default_qty_value=1, currency=currency.USD)
+
+// =============================================================================
+// 🏆 GOD MODE CONSTANTS
+// =============================================================================
+// The "Golden Trinity" (3 Verified Legs)
+// 1. ES SHORT (2m) -> Sniper.
+// 2. NQ LONG  (5m) -> Banker.
+// 3. ES LONG  (5m) -> Optimizer (Extension Target).
+
+// --- INPUTS ---
+grp_gm = "God Mode (Auto-Tuner)"
+grp_gen = "General"
+grp_ris = "Risk Management"
+
+use_auto   = input.bool(true, "✨ Enable God Mode Auto-Tuner", group=grp_gm, tooltip="Automatically applies scientifically validated parameters based on Ticker & Timeframe.")
+show_dash  = input.bool(true, "Show Dashboard", group=grp_gen)
+show_fibs  = input.bool(true, "Show Trailing Fibs", group=grp_gen)
+risk_reward= input.bool(true, "Show R:R Labels", group=grp_gen)
+
+// Manual Overrides (Used if Auto is OFF or for unlabeled tickers)
+i_fib_entry = input.float(0.5, "Fib Entry (Manual)", group=grp_gen)
+i_fib_stop  = input.float(1.0, "Fib Stop (Manual)", group=grp_gen)
+i_fib_target= input.float(0.0, "Fib Target (Manual)", group=grp_gen)
+i_expiry    = input.int(10,   "Expiry Candles", group=grp_gen)
+
+// =============================================================================
+// ⚙️ CONFIGURATION LOGIC
+// =============================================================================
+// We define the specific parameters for each known leg.
+
+var float c_fib_entry = i_fib_entry
+var float c_fib_stop  = i_fib_stop
+var float c_fib_target= i_fib_target
+var int   c_expiry    = i_expiry
+var float c_wick_min  = 0.0
+var float c_atr_max   = 0.0
+var bool  c_macro     = false
+var string c_mode_name = "Manual"
+
+// Helper to determine Ticker Root
+is_nq = syminfo.ticker == "NQ" or syminfo.ticker == "NQ1!" or syminfo.ticker == "MNQ" or syminfo.ticker == "QQQ"
+is_es = syminfo.ticker == "ES" or syminfo.ticker == "ES1!" or syminfo.ticker == "MES" or syminfo.ticker == "SPY"
+
+// Detect Timeframe (in minutes)
+tf_mins = timeframe.multiplier / (timeframe.isseconds ? 60 : 1)
+
+// AUTO-TUNER
+if use_auto
+    // -------------------------------------------------------------------------
+    // 1. THE VALIDATOR (ES Short 2m)
+    // -------------------------------------------------------------------------
+    if is_es and tf_mins == 2
+        c_mode_name := "🐻 ES Short (Validator)"
+        c_fib_entry := 0.5
+        c_fib_stop  := 1.0
+        c_fib_target:= 0.0 // Impulse Low
+        c_expiry    := 15
+        c_wick_min  := 0.25
+        c_atr_max   := 6.0
+        c_macro     := true // Filter: Trade only below EMA
+
+    // -------------------------------------------------------------------------
+    // 2. THE OPTIMIZER (ES Long 5m)
+    // -------------------------------------------------------------------------
+    else if is_es and tf_mins == 5
+        c_mode_name := "🐂 ES Long (Optimizer)"
+        c_fib_entry := 0.5
+        c_fib_stop  := 1.0
+        c_fib_target:= 0.1 // 🎯 EXTENSION TARGET
+        c_expiry    := 10
+        c_wick_min  := 0.5
+        c_atr_max   := 0.0
+        c_macro     := true // Filter: Trade only above EMA
+
+    // -------------------------------------------------------------------------
+    // 3. THE BANKER (NQ Long 5m)
+    // -------------------------------------------------------------------------
+    else if is_nq and tf_mins == 5
+        c_mode_name := "🐂 NQ Long (Banker)"
+        c_fib_entry := 0.5
+        c_fib_stop  := 1.0
+        c_fib_target:= 0.0 // Impulse High
+        c_expiry    := 10
+        c_wick_min  := 0.5
+        c_atr_max   := 0.0
+        c_macro     := true
+
+    // -------------------------------------------------------------------------
+    // FALLBACK / INACTIVE
+    // -------------------------------------------------------------------------
+    else
+        c_mode_name := "⚠️ NO GOD MODE CONFIG"
+
+// =============================================================================
+// 🧠 CORE STRATEGY LOGIC
+// =============================================================================
+
+// 1. PPI (Price-Price Interaction)
+// We need the "Other" ticker for divergence.
+other_ticker_id = is_nq ? "CME_MINI:ES1!" : "CME_MINI:NQ1!" // Default mapping
+other_close = request.security(other_ticker_id, timeframe.period, close)
+other_open  = request.security(other_ticker_id, timeframe.period, open)
+
+my_green    = close > open
+other_green = other_close > other_open
+
+// Divergence: Colors do not match
+ppi_signal = (my_green != other_green)
+
+// PPI State
+var float ppi_high = na
+var float ppi_low  = na
+var int   ppi_age  = 0
+
+if ppi_signal
+    ppi_high := high
+    ppi_low  := low
+    ppi_age  := 0
+else
+    ppi_age += 1
+
+// 2. MACRO FILTER (200 EMA on Chart? Or 50 EMA on 1H? Original was 50 EMA on 1H)
+// God Mode specs say "Macro Trend". Let's use 50 EMA on 1H as standard Proxy.
+ema_macro = request.security(syminfo.tickerid, "60", ta.ema(close, 50))
+filter_bull = not c_macro or close > ema_macro
+filter_bear = not c_macro or close < ema_macro
+
+// 3. SWEEP IDENTIFICATION
+// Look for wicks beyond PPI High/Low that CLOSE inside.
+
+// Helper: Wick Ratio
+get_wick(o, c, h, l, dir) => 
+    rng = h - l
+    if rng == 0 
+        0.0
+    else 
+        dir > 0 ? (h - math.max(o,c)) / rng : (math.min(o,c) - l) / rng
+
+// Logic
+is_sweep_bull = false
+is_sweep_bear = false
+var float sweep_level = na
+var int sweep_age = 0
+
+if ppi_age > 0 and ppi_age <= 12
+    // BULL SWEEP (Sweep Low)
+    if low < ppi_low and close > ppi_low
+        wick = get_wick(open, close, high, low, -1)
+        atr  = ta.atr(14)
+        // Check Filters
+        if wick >= c_wick_min and (c_atr_max == 0 or atr <= c_atr_max) and filter_bull
+            // Check Config Direction (ES Short Mode shouldn't take Longs etc)
+            // Implicit: logic below handles direction check via mode name or just takes all valid?
+            // "God Mode" implies we ONLY take the direction specified for that Asset/TF.
+            
+            // Direction Check:
+            is_valid_dir = false
+            if use_auto
+                if str.contains(c_mode_name, "Long")
+                    is_valid_dir := true
+            else
+                is_valid_dir := true // Manual Mode takes all
+            
+            if is_valid_dir
+                is_sweep_bull := true
+                sweep_level := low
+                sweep_age := 0
+
+    // BEAR SWEEP (Sweep High)
+    if high > ppi_high and close < ppi_high
+        wick = get_wick(open, close, high, low, 1)
+        atr  = ta.atr(14)
+        
+        if wick >= c_wick_min and (c_atr_max == 0 or atr <= c_atr_max) and filter_bear
+            // Direction Check
+            is_valid_dir = false
+            if use_auto
+                if str.contains(c_mode_name, "Short")
+                    is_valid_dir := true
+            else
+                is_valid_dir := true
+                
+            if is_valid_dir
+                is_sweep_bear := true
+                sweep_level := high
+                sweep_age := 0
+
+// 4. BOS (Break of Structure) & ENTRY
+// We wait for a CLOSE beyond the opposite PPI level.
+
+// States
+var bool state_waiting_bos_bull = false
+var bool state_waiting_bos_bear = false
+
+// Reset on new Sweep
+if is_sweep_bull
+    state_waiting_bos_bull := true
+    state_waiting_bos_bear := false // mutual exclusion
+if is_sweep_bear
+    state_waiting_bos_bear := true
+    state_waiting_bos_bull := false
+
+// Trailing logic (Update Impulse while waiting)
+// For Bull: Impulse is the High of the range. If price goes higher before entry? No.
+// Impulse is the High of the pull-back?
+// No. The "Impulse" in God Mode Trailing Fibs:
+// Bull Setup:
+//   Anchor 1: Sweep Low (Fixed).
+//   Anchor 2: The highest high seen since the Sweep (Dynamic Impulse).
+//   Entry: 50% retrace from High to Low.
+//   As High moves up, Entry moves up (Trailing).
+//   We enter when Price hits Entry.
+
+var float impulse_level = na
+
+if state_waiting_bos_bull
+    // Update Impulse (High)
+    impulse_level := math.max(nz(impulse_level, high), high)
+    
+    // Check Age Expiry
+    if (bar_index - barstate.isreal) > c_expiry // simplified expiry logic
+        // logic to expire? For now standard expiry handled by strategy settings often.
+        // Let's increment 'sweep_age'.
+        na
+    sweep_age += 1
+    if sweep_age > c_expiry
+        state_waiting_bos_bull := false
+
+    // Check BOS (Close above PPI High)
+    if close > ppi_high
+        // Valid Signal!
+        // Calculate Levels
+        // 0 is Top (Impulse). 1 is Bottom (Sweep).
+        range_val = impulse_level - sweep_level
+        entry_px  = impulse_level - (range_val * c_fib_entry)
+        stop_px   = sweep_level   // 1.0 Fib
+        
+        // Target: 0.0 (Impulse) or 0.1 (Extension)
+        // If 0.1 Ext: Target = Impulse + (Range * 0.1)
+        target_px = impulse_level + (range_val * c_fib_target)
+        
+        // EXECUTE
+        strategy.entry("Long", strategy.long, limit=entry_px, comment="GodMode Long")
+        strategy.exit("Exit L", "Long", stop=stop_px, limit=target_px, comment_loss="SL", comment_profit="TP")
+        
+        // Reset
+        state_waiting_bos_bull := false
+        
+        // Alert
+        alert("GO LONG: " + syminfo.ticker + " @ " + str.tostring(entry_px), alert.freq_once_per_bar)
+
+if state_waiting_bos_bear
+    // Update Impulse (Low)
+    impulse_level := math.min(nz(impulse_level, low), low)
+    
+    sweep_age += 1
+    if sweep_age > c_expiry
+        state_waiting_bos_bear := false
+        
+    // Check BOS (Close below PPI Low)
+    if close < ppi_low
+        // Valid Signal!
+        // 0 is Bottom (Impulse). 1 is Top (Sweep).
+        range_val = sweep_level - impulse_level
+        entry_px  = impulse_level + (range_val * c_fib_entry)
+        stop_px   = sweep_level // 1.0 Fib
+        
+        // Target: 0.0 (Impulse) or 0.1 (Extension)
+        // If 0.1 Ext: Target = Impulse - (Range * 0.1)
+        target_px = impulse_level - (range_val * c_fib_target)
+        
+        // EXECUTE
+        strategy.entry("Short", strategy.short, limit=entry_px, comment="GodMode Short")
+        strategy.exit("Exit S", "Short", stop=stop_px, limit=target_px, comment_loss="SL", comment_profit="TP")
+        
+        // Reset
+        state_waiting_bos_bear := false
+        
+        // Alert
+        alert("GO SHORT: " + syminfo.ticker + " @ " + str.tostring(entry_px), alert.freq_once_per_bar)
+
+
+// =============================================================================
+// 🎨 VISUALS
+// =============================================================================
+
+// Plot PPI
+plot(ppi_high, "PPI High", color=color.new(color.red, 50), style=plot.style_circles)
+plot(ppi_low, "PPI Low", color=color.new(color.green, 50), style=plot.style_circles)
+
+// Plot Trailing Fibs (Ghost Lines)
+// Only show if we are in waiting state
+plot(show_fibs and state_waiting_bos_bull ? impulse_level : na, "Bull Impulse", color=color.gray)
+plot(show_fibs and state_waiting_bos_bull ? (impulse_level - (impulse_level-sweep_level)*0.5) : na, "Bull Entry 50%", color=color.green, style=plot.style_cross)
+
+plot(show_fibs and state_waiting_bos_bear ? impulse_level : na, "Bear Impulse", color=color.gray)
+plot(show_fibs and state_waiting_bos_bear ? (impulse_level + (sweep_level-impulse_level)*0.5) : na, "Bear Entry 50%", color=color.red, style=plot.style_cross)
+
+// Dashboard
+var table dash = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 40))
+if show_dash and barstate.islast
+    table.cell(dash, 0, 0, "GOD MODE v7.1", text_color=color.yellow, bgcolor=color.new(color.black, 0))
+    table.cell(dash, 0, 1, "Status", text_color=color.white)
+    table.cell(dash, 1, 1, c_mode_name, text_color=str.contains(c_mode_name, "⚠️") ? color.red : color.green)
+    
+    table.cell(dash, 0, 2, "Win Rate", text_color=color.white)
+    wr = strategy.wintrades / strategy.closedtrades * 100
+    table.cell(dash, 1, 2, str.tostring(wr, "#.##") + "%", text_color=wr > 60 ? color.green : color.orange)
+    
+    table.cell(dash, 0, 3, "Net PnL", text_color=color.white)
+    pnl = strategy.netprofit
+    table.cell(dash, 1, 3, "$" + str.tostring(pnl, "#"), text_color=pnl > 0 ? color.green : color.red)
+
+    table.cell(dash, 0, 4, "Total Trades", text_color=color.white)
+    table.cell(dash, 1, 4, str.tostring(strategy.closedtrades), text_color=color.white)
