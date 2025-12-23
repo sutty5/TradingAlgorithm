@@ -102,7 +102,18 @@ if use_auto
 
 // 1. PPI (Price-Price Interaction)
 // We need the "Other" ticker for divergence.
-other_ticker_id = is_nq ? "CME_MINI:ES1!" : "CME_MINI:NQ1!" // Default mapping
+i_other_ticker = input.symbol("", "Override Comparison Ticker", group=grp_gen, tooltip="Leave empty to specific Auto-Detect (ES vs NQ).")
+
+// Auto-Detect Logic
+var string auto_other = "CME_MINI:ES1!"
+if is_nq
+    auto_other := "CME_MINI:ES1!"
+else if is_es
+    auto_other := "CME_MINI:NQ1!"
+
+// Final Selection
+other_ticker_id = i_other_ticker != "" ? i_other_ticker : auto_other
+
 other_close = request.security(other_ticker_id, timeframe.period, close)
 other_open  = request.security(other_ticker_id, timeframe.period, open)
 
@@ -298,19 +309,22 @@ plot(show_fibs and state_waiting_bos_bear ? impulse_level : na, "Bear Impulse", 
 plot(show_fibs and state_waiting_bos_bear ? (impulse_level + (sweep_level-impulse_level)*0.5) : na, "Bear Entry 50%", color=color.red, style=plot.style_cross)
 
 // Dashboard
-var table dash = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 40))
+var table dash = table.new(position.top_right, 2, 7, bgcolor=color.new(color.black, 40))
 if show_dash and barstate.islast
     table.cell(dash, 0, 0, "GOD MODE v7.1", text_color=color.yellow, bgcolor=color.new(color.black, 0))
     table.cell(dash, 0, 1, "Status", text_color=color.white)
     table.cell(dash, 1, 1, c_mode_name, text_color=str.contains(c_mode_name, "⚠️") ? color.red : color.green)
     
-    table.cell(dash, 0, 2, "Win Rate", text_color=color.white)
-    wr = strategy.wintrades / strategy.closedtrades * 100
-    table.cell(dash, 1, 2, str.tostring(wr, "#.##") + "%", text_color=wr > 60 ? color.green : color.orange)
-    
-    table.cell(dash, 0, 3, "Net PnL", text_color=color.white)
-    pnl = strategy.netprofit
-    table.cell(dash, 1, 3, "$" + str.tostring(pnl, "#"), text_color=pnl > 0 ? color.green : color.red)
+    table.cell(dash, 0, 2, "PPI Pair", text_color=color.white)
+    table.cell(dash, 1, 2, "vs " + str.replace_all(other_ticker_id, "CME_MINI:", ""), text_color=color.gray)
 
-    table.cell(dash, 0, 4, "Total Trades", text_color=color.white)
-    table.cell(dash, 1, 4, str.tostring(strategy.closedtrades), text_color=color.white)
+    table.cell(dash, 0, 3, "Win Rate", text_color=color.white)
+    wr = strategy.wintrades / strategy.closedtrades * 100
+    table.cell(dash, 1, 3, str.tostring(wr, "#.##") + "%", text_color=wr > 60 ? color.green : color.orange)
+    
+    table.cell(dash, 0, 4, "Net PnL", text_color=color.white)
+    pnl = strategy.netprofit
+    table.cell(dash, 1, 4, "$" + str.tostring(pnl, "#"), text_color=pnl > 0 ? color.green : color.red)
+
+    table.cell(dash, 0, 5, "Total Trades", text_color=color.white)
+    table.cell(dash, 1, 5, str.tostring(strategy.closedtrades), text_color=color.white)
