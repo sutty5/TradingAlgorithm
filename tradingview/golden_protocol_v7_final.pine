@@ -139,7 +139,7 @@ else
 // 2. MACRO FILTER (200 EMA on Chart? Or 50 EMA on 1H? Original was 50 EMA on 1H)
 // God Mode specs say "Macro Trend". Let's use 50 EMA on 1H as standard Proxy.
 // Use 'barmerge.gaps_on' to prevent na repainting issues if desired, but gaps_off is standard for indicators.
-ema_macro = request.security(syminfo.tickerid, "60", ta.ema(close, 50))
+ema_macro = request.security(syminfo.tickerid, "60", ta.ema(close, 50), lookahead=barmerge.lookahead_off)
 filter_bull = not c_macro or close > ema_macro
 filter_bear = not c_macro or close < ema_macro
 
