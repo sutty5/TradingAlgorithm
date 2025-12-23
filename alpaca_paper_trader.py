@@ -28,6 +28,7 @@ SYMBOL_ES = "SPY"
 
 # Global Risk
 RISK_PER_TRADE = 400.0 
+MAX_POSITION_SIZE_USD = 90000.0 # Safety Cap (Keep under $100k standard paper limit for single trade)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,6 +39,7 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
 
 # --- DATA STRUCTURES ---
 
@@ -297,9 +299,19 @@ class StrategyInstance:
             
         # Sizing
         risk = abs(entry - stop_px)
-        qty = 1
+        qty = 0
         if risk > 0.01:
-            qty = int(RISK_PER_TRADE / risk)
+            raw_qty = RISK_PER_TRADE / risk
+            
+            # Safety Cap: Check Notional Value
+            notional = raw_qty * entry
+            if notional > MAX_POSITION_SIZE_USD:
+                self.logger.warning(f"⚠️ Initial Qty {int(raw_qty)} (${notional:,.2f}) exceeds Max Position Size. Clamping.")
+                qty = int(MAX_POSITION_SIZE_USD / entry)
+            else:
+                qty = int(raw_qty)
+                
+            self.logger.info(f"💎 SIZING: Risk ${RISK_PER_TRADE} | Qty {qty} | Notional ${qty*entry:,.2f}")
             
         self.state = TradeState.FILLED # Stop firing
         
