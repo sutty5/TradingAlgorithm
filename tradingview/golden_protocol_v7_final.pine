@@ -358,31 +358,52 @@ if show_fibs
     // 1. Calculate Coordinates
     bool active = false
     bool is_bull = true
-    float y_pivot = na
-    float y_entry = na
-    float y_stop = na
-    float y_target = na
-    int x1 = na
+    
+    // Persist values for when we transition from Stalking -> Trading
+    var float p_pivot = na
+    var float p_entry = na
+    var float p_stop  = na
+    var float p_target= na
+    var int   p_x1    = na
+    var bool  p_is_bull = true
 
     if state_waiting_bos_bull
         active := true
         is_bull := true
+        p_is_bull := true
         rng = impulse_level - sweep_level
-        y_pivot := impulse_level
-        y_entry := impulse_level - (rng * c_fib_entry)
-        y_target:= impulse_level + (rng * c_fib_target)
-        y_stop  := sweep_level
-        x1      := bar_index - sweep_age
+        p_pivot := impulse_level
+        p_entry := impulse_level - (rng * c_fib_entry)
+        p_target:= impulse_level + (rng * c_fib_target)
+        p_stop  := sweep_level
+        p_x1    := bar_index - sweep_age
 
     else if state_waiting_bos_bear
         active := true
         is_bull := false
+        p_is_bull := false
         rng = sweep_level - impulse_level
-        y_pivot := impulse_level
-        y_entry := impulse_level + (rng * c_fib_entry)
-        y_target:= impulse_level - (rng * c_fib_target)
-        y_stop  := sweep_level
-        x1      := bar_index - sweep_age
+        p_pivot := impulse_level
+        p_entry := impulse_level + (rng * c_fib_entry)
+        p_target:= impulse_level - (rng * c_fib_target)
+        p_stop  := sweep_level
+        p_x1    := bar_index - sweep_age
+
+    // KEEP ACTIVE IF IN TRADE (Using persisted values)
+    if strategy.position_size != 0
+        active := true
+        is_bull := strategy.position_size > 0
+    
+    // Assign final values for drawing
+    float y_pivot = p_pivot
+    float y_entry = p_entry
+    float y_stop  = p_stop
+    float y_target= p_target
+    int   x1    = p_x1
+    
+    // If we are in trade, force the direction to match position (sanity check)
+    if strategy.position_size != 0
+        is_bull := strategy.position_size > 0
 
     // 2. Clear Old Objects
     line.delete(l_base)
