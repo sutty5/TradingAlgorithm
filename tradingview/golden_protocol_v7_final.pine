@@ -222,11 +222,7 @@ if state_waiting_bos_bull
     // Update Impulse (High)
     impulse_level := math.max(nz(impulse_level, high), high)
     
-    // Check Age Expiry
-    if (bar_index - barstate.isreal) > c_expiry // simplified expiry logic
-        // logic to expire? For now standard expiry handled by strategy settings often.
-        // Let's increment 'sweep_age'.
-        na
+
     sweep_age += 1
     if sweep_age > c_expiry
         state_waiting_bos_bull := false
