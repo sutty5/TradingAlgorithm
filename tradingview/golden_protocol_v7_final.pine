@@ -155,6 +155,18 @@ f_dbg_label(txt, y, color_) =>
     if debug_mode
         label.new(bar_index, y, txt, color=color_, style=label.style_label_down, textcolor=color.white, size=size.small)
 
+// DEBUG: Filter Bypass & Labels
+debug_mode = input.bool(false, "🐞 Debug Mode (Show All Sweeps)", group=grp_gen)
+if debug_mode
+    c_wick_min := 0.0
+    c_atr_max := 0.0
+    c_macro := false // Bypass macro
+
+// Helper: Debug Label
+f_dbg_label(txt, y, color_) =>
+    if debug_mode
+        label.new(bar_index, y, txt, color=color_, style=label.style_label_down, textcolor=color.white, size=size.small)
+
 // 3. SWEEP IDENTIFICATION
 // Look for wicks beyond PPI High/Low that CLOSE inside.
 
@@ -210,6 +222,10 @@ if ppi_age > 0 and ppi_age <= 12
                     f_dbg_label("✅ SWEEP ACCEPTED", low, color.green)
             else if debug_mode
                 f_dbg_label("🚫 DIR FAIL (Mode: " + c_mode_name + ")", low, color.orange)
+                if debug_mode
+                    f_dbg_label("✅ SWEEP ACCEPTED", low, color.green)
+            else if debug_mode
+                f_dbg_label("🚫 DIR FAIL (Mode: " + c_mode_name + ")", low, color.orange)
 
     // BEAR SWEEP (Sweep High)
     if high > ppi_high and close < ppi_high
@@ -244,6 +260,10 @@ if ppi_age > 0 and ppi_age <= 12
                 is_sweep_bear := true
                 sweep_level := high
                 sweep_age := 0
+                if debug_mode
+                    f_dbg_label("✅ SWEEP ACCEPTED", high, color.green)
+            else if debug_mode
+                f_dbg_label("🚫 DIR FAIL (Mode: " + c_mode_name + ")", high, color.orange)
                 if debug_mode
                     f_dbg_label("✅ SWEEP ACCEPTED", high, color.green)
             else if debug_mode
