@@ -440,3 +440,65 @@ if show_dash and barstate.islast
 
     table.cell(dash, 0, 5, "Total Trades", text_color=color.white)
     table.cell(dash, 1, 5, str.tostring(strategy.closedtrades), text_color=color.white)
+
+// =============================================================================
+// 🎓 TUTORIAL DASHBOARD (Active GPS)
+// =============================================================================
+show_tutor = input.bool(true, "Show Active Tutorial", group="Tutorial")
+
+var table tbl_tutor = table.new(position.bottom_right, 1, 5, bgcolor=color.new(color.black, 20), border_width=1, border_color=color.gray)
+
+if show_tutor and barstate.islast
+    // 1. TIMEFRAME CHECK (God Mode Verification)
+    tf_status = "✅ CLEAN"
+    tf_color  = color.green
+    if is_es and tf_mins != 2
+        tf_status = "⚠️ WRONG TF! USE 2m"
+        tf_color := color.red
+    else if is_nq and tf_mins != 5
+        tf_status = "⚠️ WRONG TF! USE 5m"
+        tf_color := color.red
+    
+    // 2. DETERMINE PHASE & INSTRUCTION
+    string phase_txt = ""
+    string instr_txt = ""
+    color  phase_col = color.gray
+    
+    // PRIORITY 1: IN TRADE
+    if strategy.position_size != 0
+        phase_txt := strategy.position_size > 0 ? "🐂 LONG POSITION LIVE" : "🐻 SHORT POSITION LIVE"
+        phase_col := strategy.position_size > 0 ? c_bull_main : c_bear_main
+        instr_txt := "Monitor Position.\nStop Loss & Target are Auto-Set.\nYou may manually close to secure profit."
+    
+    // PRIORITY 2: STALKING (Waiting for BOS)
+    else if state_waiting_bos_bull
+        phase_txt := "👀 STALKING BULL SETUP"
+        phase_col := c_bull_main
+        instr_txt := "1. SWEEP CONFIRMED (Green Zone).\n2. WAIT for Candle CLOSE > Entry Line.\n3. Limit Order will Auto-Place."
+    
+    else if state_waiting_bos_bear
+        phase_txt := "👀 STALKING BEAR SETUP"
+        phase_col := c_bear_main
+        instr_txt := "1. SWEEP CONFIRMED (Red Zone).\n2. WAIT for Candle CLOSE < Entry Line.\n3. Limit Order will Auto-Place."
+        
+    // PRIORITY 3: SCANNING (Idle)
+    else
+        phase_txt := "📡 SCANNING..."
+        phase_col := color.gray
+        instr_txt := "Looking for SWEEP of PPI Structure.\n(Wick beyond Pivot, Close Inside)."
+
+    // DRAW TABLE
+    // Header
+    table.cell(tbl_tutor, 0, 0, "🎓 GOD MODE TUTORIAL", bgcolor=color.new(color.blue, 40), text_color=color.white, text_size=size.normal)
+    
+    // Config Check
+    table.cell(tbl_tutor, 0, 1, "CONFIG: " + syminfo.ticker + " (" + str.tostring(tf_mins) + "m)\n" + tf_status, bgcolor=color.black, text_color=tf_color, text_size=size.small)
+    
+    // Current Phase
+    table.cell(tbl_tutor, 0, 2, "CURRENT STATE:\n" + phase_txt, bgcolor=color.new(phase_col, 80), text_color=color.white, text_size=size.normal)
+    
+    // Instructions
+    table.cell(tbl_tutor, 0, 3, "ACTION REQUIRED:\n" + instr_txt, bgcolor=color.black, text_color=color.white, text_size=size.small, text_halign=text.align_left)
+    
+    // Legend
+    table.cell(tbl_tutor, 0, 4, "LEEND: 🐂=Bull | 🐻=Bear | 🎯=Target | ⛔=Stop", bgcolor=color.new(color.gray, 80), text_color=color.white, text_size=size.tiny)
