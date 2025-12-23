@@ -257,101 +257,97 @@ if ppi_age > 0 and ppi_age <= 12
 // States
 var bool state_waiting_bos_bull = false
 var bool state_waiting_bos_bear = false
+var label lbl_trail = na // Dynamic Trailing Label
 
 // Reset on new Sweep
 if is_sweep_bull
     state_waiting_bos_bull := true
-    state_waiting_bos_bear := false // mutual exclusion
+    state_waiting_bos_bear := false 
+    // Visual: Sweep Label
+    if show_fibs
+        label.new(bar_index, low, "🐂 SWEEP", style=label.style_label_up, color=color.green, textcolor=color.white, size=size.small)
+
 if is_sweep_bear
     state_waiting_bos_bear := true
     state_waiting_bos_bull := false
+    // Visual: Sweep Label
+    if show_fibs
+        label.new(bar_index, high, "🐻 SWEEP", style=label.style_label_down, color=color.red, textcolor=color.white, size=size.small)
 
 // Trailing logic (Update Impulse while waiting)
-// For Bull: Impulse is the High of the range. If price goes higher before entry? No.
-// Impulse is the High of the pull-back?
-// No. The "Impulse" in God Mode Trailing Fibs:
-// Bull Setup:
-//   Anchor 1: Sweep Low (Fixed).
-//   Anchor 2: The highest high seen since the Sweep (Dynamic Impulse).
-//   Entry: 50% retrace from High to Low.
-//   As High moves up, Entry moves up (Trailing).
-//   We enter when Price hits Entry.
-
 var float impulse_level = na
 
 if state_waiting_bos_bull
     // Update Impulse (High)
     impulse_level := math.max(nz(impulse_level, high), high)
     
+    // Dynamic Entry Calc for Visuals
+    rng_v = impulse_level - sweep_level
+    ent_v = impulse_level - (rng_v * c_fib_entry)
+    
+    // Update Floating Label
+    if show_fibs
+        label.delete(lbl_trail)
+        lbl_trail := label.new(bar_index + 3, ent_v, "ENTRY: " + str.tostring(ent_v, "#.##"), style=label.style_label_left, color=color.green, textcolor=color.white, size=size.small)
 
     sweep_age += 1
     if sweep_age > c_expiry
         state_waiting_bos_bull := false
+        label.delete(lbl_trail) // Cleanup
 
     // Check BOS (Close above PPI High)
     if close > ppi_high
-        // Valid Signal!
-        // Calculate Levels
-        // 0 is Top (Impulse). 1 is Bottom (Sweep).
+        // EXECUTION LOGIC (MATCHES SPEC)
         range_val = impulse_level - sweep_level
         entry_px  = impulse_level - (range_val * c_fib_entry)
-        stop_px   = sweep_level   // 1.0 Fib
-        
-        // Target: 0.0 (Impulse) or 0.1 (Extension)
-        // If 0.1 Ext: Target = Impulse + (Range * 0.1)
+        stop_px   = sweep_level  
         target_px = impulse_level + (range_val * c_fib_target)
         
-        // EXECUTE
         strategy.entry("Long", strategy.long, limit=entry_px, comment="GodMode Long")
         strategy.exit("Exit L", "Long", stop=stop_px, limit=target_px, comment_loss="SL", comment_profit="TP")
         
         // Reset
         state_waiting_bos_bull := false
+        label.delete(lbl_trail) // Cleanup on execution
         
-        // Alert
         alert("GO LONG: " + syminfo.ticker + " @ " + str.tostring(entry_px), alert.freq_once_per_bar)
 
 if state_waiting_bos_bear
     // Update Impulse (Low)
     impulse_level := math.min(nz(impulse_level, low), low)
     
+    // Dynamic Entry Calc for Visuals
+    rng_v = sweep_level - impulse_level
+    ent_v = impulse_level + (rng_v * c_fib_entry)
+    
+    // Update Floating Label
+    if show_fibs
+        label.delete(lbl_trail)
+        lbl_trail := label.new(bar_index + 3, ent_v, "ENTRY: " + str.tostring(ent_v, "#.##"), style=label.style_label_left, color=color.red, textcolor=color.white, size=size.small)
+    
     sweep_age += 1
     if sweep_age > c_expiry
         state_waiting_bos_bear := false
-        
+        label.delete(lbl_trail)
+
     // Check BOS (Close below PPI Low)
     if close < ppi_low
-        // Valid Signal!
-        // 0 is Bottom (Impulse). 1 is Top (Sweep).
+        // EXECUTION LOGIC
         range_val = sweep_level - impulse_level
         entry_px  = impulse_level + (range_val * c_fib_entry)
-        stop_px   = sweep_level // 1.0 Fib
-        
-        // Target: 0.0 (Impulse) or 0.1 (Extension)
-        // If 0.1 Ext: Target = Impulse - (Range * 0.1)
+        stop_px   = sweep_level 
         target_px = impulse_level - (range_val * c_fib_target)
         
-        // EXECUTE
         strategy.entry("Short", strategy.short, limit=entry_px, comment="GodMode Short")
         strategy.exit("Exit S", "Short", stop=stop_px, limit=target_px, comment_loss="SL", comment_profit="TP")
         
         // Reset
         state_waiting_bos_bear := false
+        label.delete(lbl_trail)
         
-        // Alert
         alert("GO SHORT: " + syminfo.ticker + " @ " + str.tostring(entry_px), alert.freq_once_per_bar)
 
-
-// =============================================================================
-// 🎨 VISUALS
-// =============================================================================
-
-// Plot PPI
-plot(ppi_high, "PPI High", color=color.new(color.red, 50), style=plot.style_circles)
-plot(ppi_low, "PPI Low", color=color.new(color.green, 50), style=plot.style_circles)
-
 // Plot Trailing Fibs (Ghost Lines)
-// Only show if we are in waiting state
 plot(show_fibs and state_waiting_bos_bull ? impulse_level : na, "Bull Impulse", color=color.gray)
 plot(show_fibs and state_waiting_bos_bull ? (impulse_level - (impulse_level-sweep_level)*0.5) : na, "Bull Entry 50%", color=color.green, style=plot.style_cross)
 
