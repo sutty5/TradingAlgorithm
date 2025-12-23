@@ -40,6 +40,7 @@ class EntryMode(Enum):
     FIB_RETRACE = "FIB"       # Standard: Wait for retrace to 0.618/0.5
     SWEEP_LIMIT = "SWEEP"     # Aggressive: Place Limit immediately at Sweep Level (Betting on re-test of wick)
     BREAKOUT = "BREAKUP"      # Inverted: If price breaks PPI level, trade WITH the break (Trend Following)
+    SWEEP_CLOSE = "SWEEP_CLOSE" # Phase 5 Aggressive: Enter immediately on Sweep Candle Close (No BOS, No Retrace)
 
 
 @dataclass
@@ -109,10 +110,14 @@ class BacktestConfig:
     # v6.0 Engineering
     use_macro_filter: bool = False     # If True, trade only in direction of 1H Trend
     require_bb_expansion: bool = False # If True, require BB Width expansion
-    entry_mode: str = "FIB"            # FIB, SWEEP, BREAKUP
+    require_bb_expansion: bool = False # If True, require BB Width expansion
+    entry_mode: str = "FIB"            # FIB, SWEEP, BREAKUP, SWEEP_CLOSE
     
     # v7.0 Scientific Validation
     use_trailing_fib: bool = True      # If True, fibs update with price (v4.6+). If False, fixed at BOS (Original).
+    
+    # v7.1 Optimization (Hourly Filters)
+    exclude_hours: Optional[List[int]] = None # List of hours (UTC) to ignore setups
 
 
 @dataclass
@@ -401,6 +406,13 @@ class GoldenProtocolBacktest:
         """Look for liquidity sweep after PPI."""
         trade.candles_since_ppi += 1
         
+        # TIME FILTER CHECK (v7.1)
+        # Check if current time falls in excluded hours
+        if self.config.exclude_hours and timestamp.hour in self.config.exclude_hours:
+            trade.state = TradeState.EXPIRED
+            trade.outcome = "TIME_FILTER_EXCLUDED"
+            return
+        
         # Check for expiry
         if trade.candles_since_ppi > self.config.ppi_expiry_candles:
             trade.state = TradeState.EXPIRED
@@ -426,6 +438,27 @@ class GoldenProtocolBacktest:
             trade.sweep_extreme = candle['high']  # This becomes fib_1
             trade.fib_1 = candle['high']
             trade.state = TradeState.SWEEP
+            
+            # AGGRESSIVE ENTRY CHECK (Phase 5)
+            if self.config.entry_mode == "SWEEP_CLOSE":
+                # Enter immediately on this close
+                trade.entry_price = candle['close']
+                # Stop: Above high
+                trade.stop_price = candle['high'] 
+                # Target: 1:1 or Impulse Low (PPI Low)
+                # Let's use PPI Low as Target for now? 
+                # Or use fib_target logic. 
+                # If we use standard fib logic, fib_0 isn't defined yet (no BOS).
+                # Assume Range = (High - PPI Low).
+                range_fake = candle['high'] - trade.ppi_low
+                trade.target_price = candle['close'] - (range_fake * 1.0) # 1:1 approx? 
+                # Actually, standard logic: Target = Impulse Low.
+                trade.target_price = trade.ppi_low
+                
+                trade.fill_time = timestamp
+                trade.state = TradeState.FILLED
+                return
+                
             return
         
         # Check for bullish sweep (sweep of low)
@@ -447,6 +480,17 @@ class GoldenProtocolBacktest:
             trade.sweep_extreme = candle['low']  # This becomes fib_1
             trade.fib_1 = candle['low']
             trade.state = TradeState.SWEEP
+            
+            # AGGRESSIVE ENTRY CHECK (Phase 5)
+            if self.config.entry_mode == "SWEEP_CLOSE":
+                trade.entry_price = candle['close']
+                trade.stop_price = candle['low']
+                trade.target_price = trade.ppi_high
+                
+                trade.fill_time = timestamp
+                trade.state = TradeState.FILLED
+                return
+                
             return
     
     def _process_sweep_phase(

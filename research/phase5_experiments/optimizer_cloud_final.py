@@ -132,17 +132,21 @@ def main(action: str = "optimize"):
     breakevens = [0.0] # Pruned BE for now (focus on Trailing mechanics first)
     
     # NEW: Phase 3 Scientific Validation Parameters
-    trailing_ops = [True, False] # The Big Question: Static or Dynamic?
-    target_ops = [0.0, 0.1] # The Big Question: Impulse or Extended?
+    trailing_ops = [True] # VALIDATED: True
+    target_ops = [0.0, 0.1]
+    
+    # NEW: Phase 4 Hourly Filter Experiment
+    # None = No Filter. [1, 9, 19] = Filter Kill Zones.
+    time_filters = [None, [1, 9, 19]] 
     
     configs = []
     # Cartesian Product
-    for tf, fib, fstop, exp, wick, atr, rvol, mac, be, trail, targ in itertools.product(timeframes, fibs, fib_stops, expiries, wicks, atrs, rvols, macros, breakevens, trailing_ops, target_ops):
+    for tf, fib, fstop, exp, wick, atr, rvol, mac, be, trail, targ, tfilt in itertools.product(timeframes, fibs, fib_stops, expiries, wicks, atrs, rvols, macros, breakevens, trailing_ops, target_ops, time_filters):
         cfg = {
             "timeframe_minutes": tf,
             "fib_entry": fib,
             "fib_stop": fstop, 
-            "fib_target": targ, # Testing High/Low target vs Extension
+            "fib_target": targ, 
             "entry_expiry_candles": exp,
             "min_wick_ratio": wick,
             "max_atr": atr,
@@ -151,7 +155,8 @@ def main(action: str = "optimize"):
             "use_macro_filter": mac,
             "require_bb_expansion": False,
             "entry_mode": "FIB",
-            "use_trailing_fib": trail
+            "use_trailing_fib": trail,
+            "exclude_hours": tfilt # NEW PARAMETER
         }
         configs.append(cfg)
         
@@ -161,9 +166,11 @@ def main(action: str = "optimize"):
     chunks = [configs[i:i + CHUNK_SIZE] for i in range(0, len(configs), CHUNK_SIZE)]
     print(f"Split into {len(chunks)} chunks.")
     
-    print("🚀 DISPATCHING TO CLOUD (Phase 2: Expanded Grid + Original Specs)...")
+    print(f"Split into {len(chunks)} chunks.")
     
-    output_file = "cloud_optimization_final.csv"
+    print("🚀 DISPATCHING TO CLOUD (Phase 4: Hourly Filter Experiment)...")
+    
+    output_file = "cloud_optimization_phase4.csv"
     # Clear file if exists or handle resume? For now, simple overwrite start.
     if os.path.exists(output_file):
         os.remove(output_file)

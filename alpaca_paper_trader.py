@@ -87,19 +87,7 @@ class StrategyConfig:
 # --- STRATEGY CONFIGURATIONS (GOD MODE) ---
 # --- STRATEGY CONFIGURATIONS (GOD MODE - VALIDATED DEC 23) ---
 CONFIGS = [
-    # 1. NQ SHORT (The Alpha) - 5m (Moved from 2m for higher PnL/Robustness)
-    StrategyConfig(
-        name="NQ_SHORT_5m_ALPHA",
-        target_symbol=SYMBOL_NQ,
-        ref_symbol=SYMBOL_ES,
-        timeframe=5,
-        direction=OrderSide.SELL,
-        fib_entry=0.5,
-        fib_stop=1.0, 
-        fib_target=0.0,
-        expiry_candles=15,
-        min_wick=0.0
-    ),
+
     # 2. NQ LONG (The Banker) - 5m
     StrategyConfig(
         name="NQ_LONG_5m_BANKER",
