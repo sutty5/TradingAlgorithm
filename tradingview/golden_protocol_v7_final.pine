@@ -222,10 +222,6 @@ if ppi_age > 0 and ppi_age <= 12
                     f_dbg_label("✅ SWEEP ACCEPTED", low, color.green)
             else if debug_mode
                 f_dbg_label("🚫 DIR FAIL (Mode: " + c_mode_name + ")", low, color.orange)
-                if debug_mode
-                    f_dbg_label("✅ SWEEP ACCEPTED", low, color.green)
-            else if debug_mode
-                f_dbg_label("🚫 DIR FAIL (Mode: " + c_mode_name + ")", low, color.orange)
 
     // BEAR SWEEP (Sweep High)
     if high > ppi_high and close < ppi_high
