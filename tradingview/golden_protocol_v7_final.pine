@@ -2,7 +2,7 @@
 // © SuttyTrading
 
 //@version=6
-strategy("Golden Protocol v7.1 [GOD MODE]", overlay=true, initial_capital=50000, default_qty_type=strategy.fixed, default_qty_value=1, currency=currency.USD, max_labels_count=500)
+strategy("Golden Protocol v7.1 [GOD MODE]", overlay=true, initial_capital=1000000, default_qty_type=strategy.fixed, default_qty_value=1, currency=currency.USD, max_labels_count=500, margin_long=10, margin_short=10)
 
 // =============================================================================
 // 🏆 GOD MODE CONSTANTS
