@@ -115,16 +115,28 @@ else if is_es
 // Final Selection
 other_ticker_id = i_other_ticker != "" ? i_other_ticker : auto_other
 
-// CRITICAL FIX: Use gaps_on and lookahead_off to ensure we get REAL closed data from the other ticker.
-// Also, we must compare the SAME BAR INDEX. 
-other_close = request.security(other_ticker_id, timeframe.period, close, lookahead=barmerge.lookahead_off)
-other_open  = request.security(other_ticker_id, timeframe.period, open, lookahead=barmerge.lookahead_off)
+// CRITICAL FIX: Use gaps_off to prevent interpolation of missing bars.
+// Add ignore_invalid_symbol to handle potential ticker errors gracefully.
+other_close = request.security(other_ticker_id, timeframe.period, close, lookahead=barmerge.lookahead_off, gaps=barmerge.gaps_off, ignore_invalid_symbol=true)
+other_open  = request.security(other_ticker_id, timeframe.period, open,  lookahead=barmerge.lookahead_off, gaps=barmerge.gaps_off, ignore_invalid_symbol=true)
+
+// Valid Data Check
+has_data_my    = not na(close) and not na(open)
+has_data_other = not na(other_close) and not na(other_open)
+
+// Doji Filter: To have a "Color", body must be > 0.25 tick (filter out noise)
+min_tick = syminfo.mintick
+is_doji_my    = math.abs(close - open) <= (min_tick * 0.25)
+is_doji_other = math.abs(other_close - other_open) <= (min_tick * 0.25)
 
 my_green    = close > open
 other_green = other_close > other_open
 
-// Divergence: Colors do not match
-ppi_signal = (my_green != other_green)
+// Divergence Logic:
+// 1. Must have valid data for both.
+// 2. Neither can be a Doji (neutral).
+// 3. Colors must disagree.
+ppi_signal = has_data_my and has_data_other and (not is_doji_my) and (not is_doji_other) and (my_green != other_green)
 
 // PPI State
 var float ppi_high = na
