@@ -138,9 +138,22 @@ else
 
 // 2. MACRO FILTER (200 EMA on Chart? Or 50 EMA on 1H? Original was 50 EMA on 1H)
 // God Mode specs say "Macro Trend". Let's use 50 EMA on 1H as standard Proxy.
+// Use 'barmerge.gaps_on' to prevent na repainting issues if desired, but gaps_off is standard for indicators.
 ema_macro = request.security(syminfo.tickerid, "60", ta.ema(close, 50))
 filter_bull = not c_macro or close > ema_macro
 filter_bear = not c_macro or close < ema_macro
+
+// DEBUG: Filter Bypass & Labels
+debug_mode = input.bool(false, "🐞 Debug Mode (Show All Sweeps)", group=grp_gen)
+if debug_mode
+    c_wick_min := 0.0
+    c_atr_max := 0.0
+    c_macro := false // Bypass macro
+
+// Helper: Debug Label
+f_dbg_label(txt, y, color_) =>
+    if debug_mode
+        label.new(bar_index, y, txt, color=color_, style=label.style_label_down, textcolor=color.white, size=size.small)
 
 // 3. SWEEP IDENTIFICATION
 // Look for wicks beyond PPI High/Low that CLOSE inside.
