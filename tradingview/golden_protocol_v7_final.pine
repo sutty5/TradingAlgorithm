@@ -450,14 +450,21 @@ var table tbl_tutor = table.new(position.bottom_right, 1, 5, bgcolor=color.new(c
 
 if show_tutor and barstate.islast
     // 1. TIMEFRAME CHECK (God Mode Verification)
-    tf_status = "✅ CLEAN"
+    tf_status = "✅ CORRECT"
     tf_color  = color.green
+    bool is_wrong = false
+
     if is_es and tf_mins != 2
-        tf_status = "⚠️ WRONG TF! USE 2m"
+        tf_status = "⛔ WRONG TF! USE 2m"
         tf_color := color.red
+        is_wrong := true
     else if is_nq and tf_mins != 5
-        tf_status = "⚠️ WRONG TF! USE 5m"
+        tf_status = "⛔ WRONG TF! USE 5m"
         tf_color := color.red
+        is_wrong := true
+
+    if is_wrong
+        label.new(bar_index, high, "⚠️ STOP TRADING ⚠️\nWRONG TIMEFRAME\nSWITCH TO: " + (is_es ? "2 min" : "5 min"), color=color.new(color.red, 10), textcolor=color.white, style=label.style_label_down, size=size.huge)
     
     // 2. DETERMINE PHASE & INSTRUCTION
     string phase_txt = ""
@@ -492,7 +499,7 @@ if show_tutor and barstate.islast
     table.cell(tbl_tutor, 0, 0, "🎓 GOD MODE TUTORIAL", bgcolor=color.new(color.blue, 40), text_color=color.white, text_size=size.normal)
     
     // Config Check
-    table.cell(tbl_tutor, 0, 1, "CONFIG: " + syminfo.ticker + " (" + str.tostring(tf_mins) + "m)\n" + tf_status, bgcolor=color.black, text_color=tf_color, text_size=size.small)
+    table.cell(tbl_tutor, 0, 1, "CONFIG: " + syminfo.ticker + " (" + str.tostring(tf_mins) + "m)\n" + tf_status, bgcolor=is_wrong ? color.red : color.black, text_color=color.white, text_size=size.small)
     
     // Current Phase
     table.cell(tbl_tutor, 0, 2, "CURRENT STATE:\n" + phase_txt, bgcolor=color.new(phase_col, 80), text_color=color.white, text_size=size.normal)
