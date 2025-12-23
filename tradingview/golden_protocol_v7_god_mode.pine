@@ -2,7 +2,7 @@
 // This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
 // © SuttyTrading
 
-//@version=5
+//@version=6
 strategy("Golden Protocol v7.0 [GOD MODE]", overlay=true, initial_capital=50000, default_qty_type=strategy.fixed, default_qty_value=1, currency=currency.USD)
 
 // =============================================================================
@@ -257,7 +257,7 @@ plotshape(valid_sweep_bear, "Bear Sweep", shape.triangledown, location.abovebar,
 // Dashboard
 var table panel = table.new(position.top_right, 2, 8, bgcolor=color.new(color.black, 50))
 if barstate.islast
-    table.cell(panel, 0, 0, "GOD MODE v7.0", text_color=color.gold, bgcolor=color.black)
+    table.cell(panel, 0, 0, "GOD MODE v7.0", text_color=color.yellow, bgcolor=color.black)
     table.cell(panel, 0, 1, "Ticker", text_color=color.white)
     table.cell(panel, 1, 1, syminfo.ticker, text_color=color.white)
     table.cell(panel, 0, 2, "Config L", text_color=color.green)
