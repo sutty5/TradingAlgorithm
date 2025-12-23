@@ -348,11 +348,26 @@ if state_waiting_bos_bear
         alert("GO SHORT: " + syminfo.ticker + " @ " + str.tostring(entry_px), alert.freq_once_per_bar)
 
 // Plot Trailing Fibs (Ghost Lines)
-plot(show_fibs and state_waiting_bos_bull ? impulse_level : na, "Bull Impulse", color=color.gray)
-plot(show_fibs and state_waiting_bos_bull ? (impulse_level - (impulse_level-sweep_level)*0.5) : na, "Bull Entry 50%", color=color.green, style=plot.style_cross)
+// Only show if we are in waiting state
 
-plot(show_fibs and state_waiting_bos_bear ? impulse_level : na, "Bear Impulse", color=color.gray)
-plot(show_fibs and state_waiting_bos_bear ? (impulse_level + (sweep_level-impulse_level)*0.5) : na, "Bear Entry 50%", color=color.red, style=plot.style_cross)
+// Calculate Projected Targets for Viz
+bull_rng = impulse_level - sweep_level
+bull_tgt = impulse_level + (bull_rng * c_fib_target)
+
+bear_rng = sweep_level - impulse_level
+bear_tgt = impulse_level - (bear_rng * c_fib_target)
+
+// BULL LINES
+plot(show_fibs and state_waiting_bos_bull ? impulse_level : na, "Bull Impulse (Pivot)", color=color.gray, style=plot.style_linebr) // 0.0 (Base)
+plot(show_fibs and state_waiting_bos_bull ? (impulse_level - bull_rng*0.5) : na, "Bull Entry (50%)", color=color.green, style=plot.style_cross)
+plot(show_fibs and state_waiting_bos_bull ? sweep_level : na, "Bull Stop (1.0)", color=color.red, style=plot.style_linebr) 
+plot(show_fibs and state_waiting_bos_bull ? bull_tgt : na, "Bull Target", color=color.lime, style=plot.style_linebr, linewidth=2)
+
+// BEAR LINES
+plot(show_fibs and state_waiting_bos_bear ? impulse_level : na, "Bear Impulse (Pivot)", color=color.gray, style=plot.style_linebr) // 0.0 (Base)
+plot(show_fibs and state_waiting_bos_bear ? (impulse_level + bear_rng*0.5) : na, "Bear Entry (50%)", color=color.red, style=plot.style_cross)
+plot(show_fibs and state_waiting_bos_bear ? sweep_level : na, "Bear Stop (1.0)", color=color.red, style=plot.style_linebr)
+plot(show_fibs and state_waiting_bos_bear ? bear_tgt : na, "Bear Target", color=color.lime, style=plot.style_linebr, linewidth=2)
 
 // Dashboard
 var table dash = table.new(position.top_right, 2, 7, bgcolor=color.new(color.black, 40))
