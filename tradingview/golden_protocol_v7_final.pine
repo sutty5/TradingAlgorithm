@@ -262,16 +262,16 @@ var bool state_waiting_bos_bear = false
 if is_sweep_bull
     state_waiting_bos_bull := true
     state_waiting_bos_bear := false 
-    // Visual: Sweep Label
+    // Visual: Sweep Label (PHASE 2: WARNING -> Orange/Gold)
     if show_fibs
-        label.new(bar_index, low, "🐂 SWEEP", style=label.style_label_up, color=color.green, textcolor=color.white, size=size.normal)
+        label.new(bar_index, low, "🐂 SWEEP", style=label.style_label_up, color=color.orange, textcolor=color.black, size=size.normal)
 
 if is_sweep_bear
     state_waiting_bos_bear := true
     state_waiting_bos_bull := false
-    // Visual: Sweep Label
+    // Visual: Sweep Label (PHASE 2: WARNING -> Orange/Gold)
     if show_fibs
-        label.new(bar_index, high, "🐻 SWEEP", style=label.style_label_down, color=color.red, textcolor=color.white, size=size.normal)
+        label.new(bar_index, high, "🐻 SWEEP", style=label.style_label_down, color=color.orange, textcolor=color.black, size=size.normal)
 
 // Trailing logic (Update Impulse while waiting)
 var float impulse_level = na
@@ -448,12 +448,13 @@ if show_fibs
         b_zone := box.new(x1, y_pivot, bar_index + 5, y_stop, border_color=color(na), bgcolor=c_bg)
 
 // =============================================================================
-// 🎨 VISUALS
+// 🎨 VISUALS (PHASED COLOR CODING)
 // =============================================================================
 
-// Plot PPI with Enhanced Visibility (Diamonds)
-plotshape(ppi_high, "PPI High", shape.diamond, location.absolute, color.new(color.red, 20), size=size.tiny, offset=0)
-plotshape(ppi_low, "PPI Low", shape.diamond, location.absolute, color.new(color.green, 20), size=size.tiny, offset=0)
+// PHASE 1: PPI (STRUCTURE) -> Blue/Purple Scheme
+// Helps distinguish "Background Structure" from "Active Signals"
+plotshape(ppi_high, "PPI High", shape.diamond, location.absolute, color.new(color.purple, 20), size=size.tiny, offset=0)
+plotshape(ppi_low, "PPI Low", shape.diamond, location.absolute, color.new(color.blue, 20), size=size.tiny, offset=0)
 
 // Dashboard
 var table dash = table.new(position.top_right, 2, 7, bgcolor=color.new(color.black, 40))
