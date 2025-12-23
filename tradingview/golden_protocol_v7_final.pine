@@ -305,6 +305,10 @@ if state_waiting_bos_bull
         strategy.entry("Long", strategy.long, limit=entry_px, comment="GodMode Long")
         strategy.exit("Exit L", "Long", stop=stop_px, limit=target_px, comment_loss="SL", comment_profit="TP")
         
+        // Debug Entry
+        if debug_mode
+            f_dbg_label("🚀 LONG LIMIT SENT\n@" + str.tostring(entry_px), high, color.blue)
+
         // Reset
         state_waiting_bos_bull := false
         
@@ -335,6 +339,10 @@ if state_waiting_bos_bear
         strategy.entry("Short", strategy.short, limit=entry_px, comment="GodMode Short")
         strategy.exit("Exit S", "Short", stop=stop_px, limit=target_px, comment_loss="SL", comment_profit="TP")
         
+        // Debug Entry
+        if debug_mode
+            f_dbg_label("🚀 SHORT LIMIT SENT\n@" + str.tostring(entry_px), low, color.blue)
+
         // Reset
         state_waiting_bos_bear := false
         
