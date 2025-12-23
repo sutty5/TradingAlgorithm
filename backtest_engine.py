@@ -35,6 +35,12 @@ class TradeDirection(Enum):
     LONG = "LONG"    # Bullish - sweep of low, expecting up
     SHORT = "SHORT"  # Bearish - sweep of high, expecting down
 
+class EntryMode(Enum):
+    """Entry Logic Mode"""
+    FIB_RETRACE = "FIB"       # Standard: Wait for retrace to 0.618/0.5
+    SWEEP_LIMIT = "SWEEP"     # Aggressive: Place Limit immediately at Sweep Level (Betting on re-test of wick)
+    BREAKOUT = "BREAKUP"      # Inverted: If price breaks PPI level, trade WITH the break (Trend Following)
+
 
 @dataclass
 class TradeSetup:
@@ -95,7 +101,15 @@ class BacktestConfig:
     use_trend_filter: bool = False     # If True, only trade in direction of EMA
     trend_ema_period: int = 50         # 50 or 200
     min_atr: float = 0.0               # Minimum volatility required
+    max_atr: float = 0.0               # Maximum volatility allowed (0.0 = disabled)
+    min_wick_ratio: float = 0.0        # Minimum sweep wick ratio
+    min_rvol: float = 0.0              # Minimum relative volume
     breakeven_trigger_r: float = 0.0   # If > 0, move stop to BE at this R-multiple
+    
+    # v6.0 Engineering
+    use_macro_filter: bool = False     # If True, trade only in direction of 1H Trend
+    require_bb_expansion: bool = False # If True, require BB Width expansion
+    entry_mode: str = "FIB"            # FIB, SWEEP, BREAKUP
 
 
 @dataclass
@@ -175,15 +189,49 @@ def calculate_fib_levels(
     fib_range = abs(fib_1 - fib_0)
     
     if direction == TradeDirection.SHORT:
-        # Bearish: fib_1 = sweep high (stop), fib_0 = impulse low (target)
-        entry = fib_0 + config.fib_entry * fib_range   # 0.5 fib
-        stop = fib_1                                    # 1.0 fib (sweep extreme)
-        target = fib_0                                  # 0.0 fib (impulse end)
+        # Bearish
+        if config.entry_mode == "SWEEP":
+            # SWEEP MODE: Limit at Sweep High (Retest)
+            # Stop: 1.0 (Sweep High) ?? No, if we enter AT Sweep High, stop must be higher.
+            # Stop: 1.272 Ext? Or Fixed points? 
+            # Let's use 10 points for now for "Sniper" retest. Or Fib Extension 1.272.
+            # IMPOSSIBLE RISK FREE? No.
+            # Let's say Stop is Sweep High + (Range * 0.272)
+            fib_ext = fib_1 + (fib_range * 0.272)
+            entry = fib_1 # Enter at the top
+            stop = fib_ext
+            target = fib_0
+            
+        elif config.entry_mode == "BREAKUP":
+            # BREAKOUT MODE: We trade the BREAK of the PPI High.
+            # Entry: PPI High + Filter?
+            # Stop: PPI Low? Or midpoint?
+            # This logic is fundamentally different (Trend Following).
+            # Let's stick to Reversion logic for now (SWEEP/FIB).
+            entry = fib_0 + config.fib_entry * fib_range
+            stop = fib_1
+            target = fib_0 
+            
+        else:
+            # FIB MODE (Standard)
+            entry = fib_0 + config.fib_entry * fib_range   # 0.5 fib
+            stop = fib_1                                    # 1.0 fib (sweep extreme)
+            target = fib_0                                  # 0.0 fib (impulse end)
+
     else:
-        # Bullish: fib_1 = sweep low (stop), fib_0 = impulse high (target)
-        entry = fib_0 - config.fib_entry * fib_range   # 0.5 fib
-        stop = fib_1                                    # 1.0 fib (sweep extreme)
-        target = fib_0                                  # 0.0 fib (impulse end)
+        # Bullish
+        if config.entry_mode == "SWEEP":
+            # SWEEP MODE: Limit at Sweep Low
+            fib_ext = fib_1 - (fib_range * 0.272)
+            entry = fib_1 
+            stop = fib_ext
+            target = fib_0
+            
+        else:
+            # FIB MODE (Standard)
+            entry = fib_0 - config.fib_entry * fib_range   # 0.5 fib
+            stop = fib_1                                    # 1.0 fib (sweep extreme)
+            target = fib_0                                  # 0.0 fib (impulse end)
     
     return entry, stop, target
 
@@ -354,6 +402,17 @@ class GoldenProtocolBacktest:
         # Check for bearish sweep (sweep of high)
         # Condition: Wick above PPI high, but close inside
         if candle['high'] > trade.ppi_high and candle['close'] <= trade.ppi_high:
+            # FILTER CHECK
+            if self.config.max_atr > 0 and candle.get('atr_14', 0) > self.config.max_atr: return
+            if self.config.min_wick_ratio > 0 and candle.get('wick_ratio_up', 0) < self.config.min_wick_ratio: return
+            if self.config.min_rvol > 0 and candle.get('rvol', 0) < self.config.min_rvol: return
+            
+            # BB Expansion
+            if self.config.require_bb_expansion and not candle.get('bb_expansion', False): return
+            
+            # Macro Alignment (Short requires Macro Bearish (-1))
+            if self.config.use_macro_filter and candle.get('macro_trend', 0) != -1: return
+
             trade.sweep_time = timestamp
             trade.sweep_direction = TradeDirection.SHORT
             trade.sweep_extreme = candle['high']  # This becomes fib_1
@@ -364,6 +423,17 @@ class GoldenProtocolBacktest:
         # Check for bullish sweep (sweep of low)
         # Condition: Wick below PPI low, but close inside
         if candle['low'] < trade.ppi_low and candle['close'] >= trade.ppi_low:
+            # FILTER CHECK
+            if self.config.max_atr > 0 and candle.get('atr_14', 0) > self.config.max_atr: return
+            if self.config.min_wick_ratio > 0 and candle.get('wick_ratio_down', 0) < self.config.min_wick_ratio: return
+            if self.config.min_rvol > 0 and candle.get('rvol', 0) < self.config.min_rvol: return
+
+            # BB Expansion
+            if self.config.require_bb_expansion and not candle.get('bb_expansion', False): return
+            
+            # Macro Alignment (Long requires Macro Bullish (1))
+            if self.config.use_macro_filter and candle.get('macro_trend', 0) != 1: return
+            
             trade.sweep_time = timestamp
             trade.sweep_direction = TradeDirection.LONG
             trade.sweep_extreme = candle['low']  # This becomes fib_1

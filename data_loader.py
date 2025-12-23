@@ -161,6 +161,21 @@ def load_and_prepare_data(
     Returns:
         Tuple of (es_ohlcv, nq_ohlcv) DataFrames with aligned timestamps
     """
+    
+    # CACHING LOGIC
+    cache_dir = Path("data/cache")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    
+    es_cache_path = cache_dir / f"{Path(filepath).stem}_es_{timeframe_minutes}m.parquet"
+    nq_cache_path = cache_dir / f"{Path(filepath).stem}_nq_{timeframe_minutes}m.parquet"
+    
+    if es_cache_path.exists() and nq_cache_path.exists():
+        print(f"Loading cached data from {cache_dir}...")
+        es_ohlcv = pd.read_parquet(es_cache_path)
+        nq_ohlcv = pd.read_parquet(nq_cache_path)
+        print("  Cache hit! Data loaded.")
+        return es_ohlcv, nq_ohlcv
+        
     print(f"Loading data from {filepath}...")
     raw_df = load_dbn_file(filepath)
     print(f"  Loaded {len(raw_df):,} raw records")
@@ -199,6 +214,12 @@ def load_and_prepare_data(
     es_ohlcv = add_technical_indicators(es_ohlcv)
     nq_ohlcv = add_technical_indicators(nq_ohlcv)
     
+    # SAVE TO CACHE
+    print("Saving to cache...")
+    es_ohlcv.to_parquet(es_cache_path)
+    nq_ohlcv.to_parquet(nq_cache_path)
+    print("  Cache saved.")
+    
     return es_ohlcv, nq_ohlcv
 
 
@@ -216,6 +237,53 @@ def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     true_range = np.max(ranges, axis=1)
     df['atr_14'] = true_range.rolling(14).mean()
     
+    # RVOL (Relative Volume vs 20 period SMA)
+    df['vol_ema_20'] = df['volume'].rolling(20).mean()
+    df['rvol'] = df['volume'] / df['vol_ema_20']
+    
+    # Wick Ratios
+    # Upper Wick (for Short Sweeps): High - Max(Open, Close)
+    # Lower Wick (for Long Sweeps): Min(Open, Close) - Low
+    candle_range = df['high'] - df['low']
+    body_top = df[['open', 'close']].max(axis=1)
+    body_bottom = df[['open', 'close']].min(axis=1)
+    
+    df['wick_ratio_up'] = (df['high'] - body_top) / candle_range
+    df['wick_ratio_down'] = (body_bottom - df['low']) / candle_range
+    
+    # Handle div by zero
+    df['wick_ratio_up'] = df['wick_ratio_up'].fillna(0.0)
+    df['wick_ratio_down'] = df['wick_ratio_down'].fillna(0.0)
+    df['rvol'] = df['rvol'].fillna(0.0)
+
+    # --- MACRO CONTEXT ---
+    # We want 1H Trend info on the 2m chart.
+    # Resample to 1H, calc EMA, reindex back to 2m (Forward fill)
+    
+    # 1H Trend
+    # Resample
+    df_1h = df.resample('1h').last() # approximate
+    df_1h['ema_1h_50'] = df_1h['close'].ewm(span=50, adjust=False).mean()
+    df_1h['macro_trend'] = np.where(df_1h['close'] > df_1h['ema_1h_50'], 1, -1)
+    
+    # Reindex back to original index (ffill)
+    df['macro_trend'] = df_1h['macro_trend'].reindex(df.index, method='ffill')
+    
+    # Bollinger Bands (Expansion Check)
+    # Standard: 20, 2
+    period = 20
+    std_dev = 2
+    df['bb_mid'] = df['close'].rolling(window=period).mean()
+    df['bb_std'] = df['close'].rolling(window=period).std()
+    df['bb_upper'] = df['bb_mid'] + (df['bb_std'] * std_dev)
+    df['bb_lower'] = df['bb_mid'] - (df['bb_std'] * std_dev)
+    
+    # BB Width (Normalized)
+    df['bb_width'] = (df['bb_upper'] - df['bb_lower']) / df['bb_mid']
+    # Expansion: Is current width > recent average width?
+    df['bb_width_ma'] = df['bb_width'].rolling(50).mean()
+    df['bb_expansion'] = df['bb_width'] > df['bb_width_ma']
+
     return df
 
 

@@ -1,3 +1,4 @@
+
 """
 Golden Protocol v5.0 - EINSTEIN DEEP FLIGHT Optimizer
 
@@ -5,11 +6,14 @@ Tests "Outside the Box" Logic:
 - Trend Filtering (EMA 50/200)
 - Dynamic Breakeven (0.5 R)
 - Standard Filters (Hours, Direction, Fib)
+- EINSTEIN METRICS: Wick Ratio, RVOL, ATR Constraints
 
 Goal: Find the "Breakthrough" (70% WR + High Volume).
 """
 import pandas as pd
 import numpy as np
+import shutil
+from pathlib import Path
 from itertools import product
 from dataclasses import dataclass, field
 from typing import List, Dict, Tuple, Optional
@@ -19,18 +23,35 @@ warnings.filterwarnings('ignore')
 # ============================================================
 # PARAMETER SPACE
 # ============================================================
-TIMEFRAMES = [2, 5]  # Focus on key TFs
+TIMEFRAMES = [2]  # Focus on key TFs
 
 # Optimization Parameters
-PARAMS = {
-    'direction': ['BOTH'], # Trend filter handles bias
-    'blocked_hours': [[], [8, 9, 18, 19]], # Use best known + open
-    'fib_entry': [0.5, 0.618],
-    'trend_filter': [False, True],
-    'trend_ema': [50, 200], # Only used if trend_filter=True
-    'breakeven_r': [0.0, 0.5], # 0.0=Off, 0.5=Move to BE at 0.5R
-    'ppi_expiry': [12],
-    'entry_expiry': [5, 7],
+# Common
+COMMON_PARAMS = {
+    'direction': ['BOTH'], 
+    'blocked_hours': [[], [8, 9, 18, 19]], 
+    'fib_entry': [0.618], # Confirmed best
+    'entry_expiry': [7],
+    'min_wick_ratio': [0.0, 0.25, 0.35],
+    'min_rvol': [0.0, 1.0],
+}
+
+# Asset Specific Overrides
+PARAMS_ES = {
+    **COMMON_PARAMS,
+    'trend_filter': [False], # ES is mean reverting usually
+    'breakeven_r': [0.5], # Protect profit
+    'max_atr': [0.0, 4.0, 6.0], # Filter chop/news
+    'min_atr': [0.0],
+}
+
+PARAMS_NQ = {
+    **COMMON_PARAMS,
+    'trend_filter': [True, False], # NQ trends hard
+    'trend_ema': [50],
+    'breakeven_r': [0.0, 0.5],
+    'max_atr': [0.0],
+    'min_atr': [0.0, 12.0, 15.0], # Filter low vol
 }
 
 @dataclass
@@ -42,8 +63,11 @@ class AssetConfig:
     blocked_hours: List[int]
     fib_entry: float
     trend_filter: bool
-    trend_ema: int
     breakeven_r: float
+    min_wick_ratio: float
+    min_rvol: float
+    min_atr: float
+    max_atr: float
     wins: int = 0
     losses: int = 0
     pnl: float = 0.0
@@ -88,74 +112,73 @@ class CombinedConfig:
     
     @property
     def score(self):
-        """Score: Goal is 70% WR + High Volume"""
-        pnl_norm = min(max(self.total_pnl / 25000, -1), 1)
-        vol_norm = min(self.filled / 200, 1)
+        """Score: Goal is 70% WR + High Volume (>1:1 R:R is hard coded in engine)"""
+        if self.win_rate < 50: return 0 
         
-        # Exponential Bonus for High Win Rate
-        wr_bonus = 0
-        if self.win_rate >= 60: wr_bonus += (self.win_rate - 60) * 2
-        if self.win_rate >= 70: wr_bonus += (self.win_rate - 70) * 5
+        # We want PnL and Frequency
+        pnl_score = self.total_pnl / 1000 # $1k = 1 point
+        vol_score = self.filled * 2
+        wr_score = (self.win_rate - 50) * 10
         
-        # Base Score
-        return (self.win_rate * 0.5) + (pnl_norm * 50) + (vol_norm * 20) + wr_bonus
+        return pnl_score + vol_score + wr_score
 
 
 def run_timeframe_optimization(dbn_path: str, timeframe: int, asset: str) -> List[AssetConfig]:
     """Run optimization for a single asset with v5.0 logic."""
     from data_loader import load_and_prepare_data
-    from backtest_engine import GoldenProtocolBacktest, BacktestConfig, TradeState, TradeDirection
+    from backtest_engine import GoldenProtocolBacktest, BacktestConfig, TradeState
     
-    # Load data
+    # Load data (Cached)
     es_data, nq_data = load_and_prepare_data(dbn_path, timeframe_minutes=timeframe)
     
     results = []
     
-    # Generate configurations
-    # We must run backtests for logic params (Trend, BE) because they change trade OUTCOMES, not just filter them.
-    # Unlike hours/direction which can be filtered post-hoc, Trend/BE change the trade flow.
-    # We will group by "Execution Params" vs "Filter Params".
+    # Select Params
+    P = PARAMS_ES if asset == 'ES' else PARAMS_NQ
     
-    # Execution Params: Fib, Trend Filter, Trend EMA, Breakeven
-    exec_configs = list(product(
-        PARAMS['fib_entry'],
-        PARAMS['trend_filter'],
-        PARAMS['trend_ema'],
-        PARAMS['breakeven_r'],
-        PARAMS['entry_expiry']
-    ))
+    # Generate Exec Configs
+    # keys: trend_filter, trend_ema(NQ only), breakeven_r, min_wick, min_rvol, min_atr, max_atr
     
-    print(f"    Testing {len(exec_configs)} execution variances...")
+    keys = ['fib_entry', 'entry_expiry', 'breakeven_r', 'min_wick_ratio', 'min_rvol', 'min_atr', 'max_atr', 'trend_filter']
+    if 'trend_ema' in P: keys.append('trend_ema')
     
-    # Memoization not as easy here due to logic changes, but we can batch.
-    # Actually, we have to run the engine for each Logic Combo.
+    # Create product iterator
+    lists = [P[k] for k in keys]
+    configs = list(product(*lists))
     
-    for fib_e, use_trend, trend_ema, be_r, entry_exp in exec_configs:
-        # Skip invalid combos (e.g. trend_ema doesn't matter if use_trend=False)
-        if not use_trend and trend_ema == 200: continue # optimization: only run False once per EMA
+    print(f"    Testing {len(configs)} variances for {asset} {timeframe}m...")
+    
+    for values in configs:
+        # Unpack
+        kv = dict(zip(keys, values))
         
+        # Logic check: EMA only if Trend Filter
+        trend_ema = kv.get('trend_ema', 50) # Default for ES
+        if not kv['trend_filter'] and 'trend_ema' in kv and trend_ema == 200: 
+            continue # Skip redundant false checks
+            
         config = BacktestConfig(
-            fib_entry=fib_e, 
+            fib_entry=kv['fib_entry'], 
             fib_stop=1.0, 
             fib_target=0.0,
             ppi_expiry_candles=12, 
-            entry_expiry_candles=entry_exp,
-            use_trend_filter=use_trend,
+            entry_expiry_candles=kv['entry_expiry'],
+            use_trend_filter=kv['trend_filter'],
             trend_ema_period=trend_ema,
-            breakeven_trigger_r=be_r
+            breakeven_trigger_r=kv['breakeven_r'],
+            min_atr=kv['min_atr'],
+            max_atr=kv['max_atr'],
+            min_wick_ratio=kv['min_wick_ratio'],
+            min_rvol=kv['min_rvol']
         )
         
         engine = GoldenProtocolBacktest(config)
-        bt_results = engine.run(es_data, nq_data)
+        bt_results = engine.run(es_data, nq_data) # Fast run with cached data + pre-calc indicators
         
-        # Post-process filters (Hours, Direction)
+        # Post-process filters (Hours)
         trades = bt_results.trades
         
-        for blocked_hours in PARAMS['blocked_hours']:
-            # Direction is always "BOTH" in this run as trend filter handles bias, 
-            # but we can check if SHORT_ONLY/LONG_ONLY helps too?
-            # User wants simplified "Breakthrough". Let's stick to BOTH to let trend filter work.
-            
+        for blocked_hours in P['blocked_hours']:
             filtered = []
             for t in trades:
                 if t.asset != asset: continue
@@ -167,7 +190,7 @@ def run_timeframe_optimization(dbn_path: str, timeframe: int, asset: str) -> Lis
             losses = sum(1 for t in filtered if t.state == TradeState.LOSS)
             pnl = sum(t.pnl for t in filtered)
             
-            if wins + losses < 10: continue
+            if wins + losses < 15: continue # Minimum sample
             
             # max cl
             max_cl = cl = 0
@@ -180,22 +203,33 @@ def run_timeframe_optimization(dbn_path: str, timeframe: int, asset: str) -> Lis
             
             cfg = AssetConfig(
                 asset=asset, timeframe=timeframe, direction="BOTH",
-                blocked_hours=list(blocked_hours), fib_entry=fib_e,
-                trend_filter=use_trend, trend_ema=trend_ema if use_trend else 0,
-                breakeven_r=be_r,
+                blocked_hours=list(blocked_hours), fib_entry=kv['fib_entry'],
+                trend_filter=kv['trend_filter'], 
+                breakeven_r=kv['breakeven_r'],
+                min_wick_ratio=kv['min_wick_ratio'],
+                min_rvol=kv['min_rvol'],
+                min_atr=kv['min_atr'],
+                max_atr=kv['max_atr'],
                 wins=wins, losses=losses, pnl=pnl, max_consec_losses=max_cl
             )
             results.append(cfg)
 
     # Sort
     results.sort(key=lambda c: c.pnl, reverse=True)
-    return results[:50] # Return top 50 per asset per TF
+    return results[:50] # Top 50
 
 
 def run_full_optimization():
+    # 0. Clear Cache (Disabled to use cached 2m data)
+    # print("Clearing stale cache...")
+    # cache_dir = Path("data/cache")
+    # if cache_dir.exists():
+    #     for f in cache_dir.glob("*.parquet"):
+    #         f.unlink()
+    
     dbn_path = "data/databento_trades/trades_es_nq_2025-09-21_2025-12-20.dbn"
     print("="*80)
-    print("  v5.0 EINSTEIN DEEP FLIGHT - OPTIMIZATION RUN")
+    print("  v5.1 EINSTEIN HYPER-OPTIMIZATION RUN")
     print("="*80)
     
     all_es = []
@@ -214,8 +248,8 @@ def run_full_optimization():
     print("\nFinding Golden Combinations...")
     combined = []
     
-    top_es = sorted(all_es, key=lambda c: c.win_rate, reverse=True)[:30]
-    top_nq = sorted(all_nq, key=lambda c: c.win_rate, reverse=True)[:30]
+    top_es = sorted(all_es, key=lambda c: c.win_rate, reverse=True)[:50]
+    top_nq = sorted(all_nq, key=lambda c: c.win_rate, reverse=True)[:50]
     
     for es in [None] + top_es:
         for nq in [None] + top_nq:
@@ -223,7 +257,7 @@ def run_full_optimization():
             
             c = CombinedConfig(es_config=es, nq_config=nq)
             # Filter for Grail candidates
-            if c.filled >= 40: # Minimum volume
+            if c.filled >= 30 and c.win_rate > 40: 
                 combined.append(c)
                 
     combined.sort(key=lambda c: c.score, reverse=True)
@@ -240,15 +274,15 @@ def run_full_optimization():
     for i, c in enumerate(combined[:25], 1):
         es_str = "OFF"
         if c.es_config:
-            trend = f"EMA{c.es_config.trend_ema}" if c.es_config.trend_filter else "NoTrend"
-            be = f"BE@{c.es_config.breakeven_r}" if c.es_config.breakeven_r > 0 else "NoBE"
-            es_str = f"{c.es_config.timeframe}m {trend} {be} {c.es_config.win_rate:.0f}%"
+            W = c.es_config.min_wick_ratio
+            R = c.es_config.min_rvol
+            es_str = f"{c.es_config.timeframe}m W>{W} V>{R} {c.es_config.win_rate:.0f}%"
             
         nq_str = "OFF"
         if c.nq_config:
-            trend = f"EMA{c.nq_config.trend_ema}" if c.nq_config.trend_filter else "NoTrend"
-            be = f"BE@{c.nq_config.breakeven_r}" if c.nq_config.breakeven_r > 0 else "NoBE"
-            nq_str = f"{c.nq_config.timeframe}m {trend} {be} {c.nq_config.win_rate:.0f}%"
+            W = c.nq_config.min_wick_ratio
+            R = c.nq_config.min_rvol
+            nq_str = f"{c.nq_config.timeframe}m W>{W} V>{R} {c.nq_config.win_rate:.0f}%"
             
         print(f"{i:>2} | {c.win_rate:>5.1f}% | ${c.total_pnl:>9,.0f} | {c.filled:>6} | {c.max_consec:>3} | {es_str:<25} | {nq_str:<25}")
 
@@ -258,13 +292,13 @@ def run_full_optimization():
             'combined_pnl': c.total_pnl,
             'combined_trades': c.filled,
             'max_consec_losses': c.max_consec,
-            'es_config': str(c.es_config) if c.es_config else "One",
+            'es_config': str(c.es_config) if c.es_config else "None",
             'nq_config': str(c.nq_config) if c.nq_config else "None"
         }
         results_data.append(row)
         
-    pd.DataFrame(results_data).to_csv('optimization_v50_einstein.csv', index=False)
-    print("\nResults saved to optimization_v50_einstein.csv")
+    pd.DataFrame(results_data).to_csv('optimization_v51_einstein.csv', index=False)
+    print("\nResults saved to optimization_v51_einstein.csv")
 
 if __name__ == "__main__":
     run_full_optimization()

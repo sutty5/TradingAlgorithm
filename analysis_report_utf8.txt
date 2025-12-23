@@ -1,0 +1,81 @@
+Loaded 1768 results.
+
+🏆 TOP 10 STRATEGIES (Global) 🏆
+                                                 config  ...      pnl
+913   {'timeframe_minutes': 3, 'fib_entry': 0.5, 'fi...  ...  3610.00
+856   {'timeframe_minutes': 3, 'fib_entry': 0.5, 'fi...  ...  3610.00
+1094  {'timeframe_minutes': 3, 'fib_entry': 0.5, 'fi...  ...  3610.00
+1037  {'timeframe_minutes': 3, 'fib_entry': 0.5, 'fi...  ...  3610.00
+1032  {'timeframe_minutes': 3, 'fib_entry': 0.5, 'fi...  ...  3737.50
+1083  {'timeframe_minutes': 3, 'fib_entry': 0.5, 'fi...  ...  3737.50
+851   {'timeframe_minutes': 3, 'fib_entry': 0.5, 'fi...  ...  3737.50
+902   {'timeframe_minutes': 3, 'fib_entry': 0.5, 'fi...  ...  3737.50
+662   {'timeframe_minutes': 2, 'fib_entry': 0.5, 'fi...  ...  7843.75
+440   {'timeframe_minutes': 2, 'fib_entry': 0.5, 'fi...  ...  7843.75
+
+[10 rows x 6 columns]
+
+💎 BEST PER ASSET & TIMEFRAME 💎
+
+ES - 1m:
+  WR: 63.16% | Trades: 38 | PnL: $1050.00
+  Dir: LONG
+  Config: {'timeframe_minutes': 1, 'fib_entry': 0.5, 'fib_stop': 1.0, 'fib_target': 0.0, 'entry_expiry_candles': 10, 'min_wick_ratio': 0.5, 'max_atr': 4.0, 'min_rvol': 2.0, 'breakeven_trigger_r': 0.0, 'use_macro_filter': True, 'require_bb_expansion': False, 'entry_mode': 'FIB'}
+
+ES - 2m:
+  WR: 75.93% | Trades: 54 | PnL: $7843.75
+  Dir: SHORT
+  Config: {'timeframe_minutes': 2, 'fib_entry': 0.5, 'fib_stop': 0.893, 'fib_target': 0.0, 'entry_expiry_candles': 15, 'min_wick_ratio': 0.25, 'max_atr': 6.0, 'min_rvol': 0.0, 'breakeven_trigger_r': 0.0, 'use_macro_filter': True, 'require_bb_expansion': False, 'entry_mode': 'FIB'}
+  🚨 GRAIL ALERT (>70%) 🚨
+
+ES - 3m:
+  WR: 66.67% | Trades: 36 | PnL: $3662.50
+  Dir: SHORT
+  Config: {'timeframe_minutes': 3, 'fib_entry': 0.5, 'fib_stop': 0.893, 'fib_target': 0.0, 'entry_expiry_candles': 15, 'min_wick_ratio': 0.5, 'max_atr': 4.0, 'min_rvol': 0.0, 'breakeven_trigger_r': 0.0, 'use_macro_filter': True, 'require_bb_expansion': False, 'entry_mode': 'FIB'}
+
+ES - 5m:
+  WR: 65.45% | Trades: 55 | PnL: $7300.00
+  Dir: SHORT
+  Config: {'timeframe_minutes': 5, 'fib_entry': 0.5, 'fib_stop': 1.0, 'fib_target': 0.0, 'entry_expiry_candles': 10, 'min_wick_ratio': 0.25, 'max_atr': 6.0, 'min_rvol': 0.0, 'breakeven_trigger_r': 0.0, 'use_macro_filter': False, 'require_bb_expansion': False, 'entry_mode': 'FIB'}
+
+ES - 15m:
+  WR: 58.06% | Trades: 31 | PnL: $8987.50
+  Dir: SHORT
+  Config: {'timeframe_minutes': 15, 'fib_entry': 0.55, 'fib_stop': 1.0, 'fib_target': 0.0, 'entry_expiry_candles': 3, 'min_wick_ratio': 0.0, 'max_atr': 0.0, 'min_rvol': 1.2, 'breakeven_trigger_r': 0.0, 'use_macro_filter': True, 'require_bb_expansion': False, 'entry_mode': 'FIB'}
+
+NQ - 1m:
+  WR: 60.00% | Trades: 35 | PnL: $5125.00
+  Dir: SHORT
+  Config: {'timeframe_minutes': 1, 'fib_entry': 0.5, 'fib_stop': 1.0, 'fib_target': 0.0, 'entry_expiry_candles': 10, 'min_wick_ratio': 0.35, 'max_atr': 0.0, 'min_rvol': 0.0, 'breakeven_trigger_r': 0.0, 'use_macro_filter': True, 'require_bb_expansion': False, 'entry_mode': 'FIB'}
+
+NQ - 2m:
+  WR: 66.13% | Trades: 62 | PnL: $7840.00
+  Dir: LONG
+  Config: {'timeframe_minutes': 2, 'fib_entry': 0.5, 'fib_stop': 0.893, 'fib_target': 0.0, 'entry_expiry_candles': 15, 'min_wick_ratio': 0.35, 'max_atr': 0.0, 'min_rvol': 1.2, 'breakeven_trigger_r': 0.0, 'use_macro_filter': True, 'require_bb_expansion': False, 'entry_mode': 'FIB'}
+
+NQ - 3m:
+  WR: 77.14% | Trades: 35 | PnL: $3610.00
+  Dir: LONG
+  Config: {'timeframe_minutes': 3, 'fib_entry': 0.5, 'fib_stop': 1.0, 'fib_target': 0.0, 'entry_expiry_candles': 15, 'min_wick_ratio': 0.25, 'max_atr': 6.0, 'min_rvol': 0.0, 'breakeven_trigger_r': 0.0, 'use_macro_filter': False, 'require_bb_expansion': False, 'entry_mode': 'FIB'}
+  🚨 GRAIL ALERT (>70%) 🚨
+
+NQ - 5m:
+  WR: 71.43% | Trades: 56 | PnL: $12120.00
+  Dir: LONG
+  Config: {'timeframe_minutes': 5, 'fib_entry': 0.5, 'fib_stop': 1.0, 'fib_target': 0.0, 'entry_expiry_candles': 10, 'min_wick_ratio': 0.5, 'max_atr': 0.0, 'min_rvol': 0.0, 'breakeven_trigger_r': 0.0, 'use_macro_filter': True, 'require_bb_expansion': False, 'entry_mode': 'FIB'}
+  🚨 GRAIL ALERT (>70%) 🚨
+
+NQ - 15m:
+  WR: 66.67% | Trades: 33 | PnL: $12915.00
+  Dir: SHORT
+  Config: {'timeframe_minutes': 15, 'fib_entry': 0.5, 'fib_stop': 1.0, 'fib_target': 0.0, 'entry_expiry_candles': 7, 'min_wick_ratio': 0.0, 'max_atr': 0.0, 'min_rvol': 1.2, 'breakeven_trigger_r': 0.0, 'use_macro_filter': False, 'require_bb_expansion': False, 'entry_mode': 'FIB'}
+
+📜 ORIGINAL PROTOCOL (Deep Stop) CHECKS 📜
+     asset  ...                                             config
+1094    NQ  ...  {'timeframe_minutes': 3, 'fib_entry': 0.5, 'fi...
+1037    NQ  ...  {'timeframe_minutes': 3, 'fib_entry': 0.5, 'fi...
+1032    NQ  ...  {'timeframe_minutes': 3, 'fib_entry': 0.5, 'fi...
+1083    NQ  ...  {'timeframe_minutes': 3, 'fib_entry': 0.5, 'fi...
+662     ES  ...  {'timeframe_minutes': 2, 'fib_entry': 0.5, 'fi...
+
+[5 rows x 5 columns]
