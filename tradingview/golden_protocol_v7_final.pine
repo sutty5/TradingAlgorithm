@@ -351,73 +351,74 @@ c_bear_main = #FF5252 // Bright Red/Orange
 c_bear_bg   = color.new(#FF5252, 90)
 c_text      = color.white
 
-// Helper to Update Lines
-f_move_fib(active, is_bull, x1, y_pivot, y_entry, y_stop, y_target) =>
-    if active
-        // Determine Color
-        c_main = is_bull ? c_bull_main : c_bear_main
-        c_bg   = is_bull ? c_bull_bg   : c_bear_bg
-        
-        // 1. PIVOT (0.0)
-        line.delete(l_base)
-        l_base := line.new(x1, y_pivot, bar_index + 5, y_pivot, color=color.gray, style=line.style_dotted)
-        label.delete(lb_base)
-        lb_base := label.new(bar_index + 5, y_pivot, "Avg (0.0)\n" + str.tostring(y_pivot, "#.##"), color=color(na), textcolor=color.gray, style=label.style_label_left, size=size.tiny)
-
-        // 2. ENTRY (0.5) - Emphasized
-        line.delete(l_entry)
-        l_entry := line.new(x1, y_entry, bar_index + 5, y_entry, color=c_main, width=2)
-        label.delete(lb_entry)
-        lb_entry := label.new(bar_index + 5, y_entry, "ENTRY (0.5)\n" + str.tostring(y_entry, "#.##"), color=c_main, textcolor=color.black, style=label.style_label_left, size=size.small)
-
-        // 3. STOP (1.0)
-        line.delete(l_stop)
-        l_stop := line.new(x1, y_stop, bar_index + 5, y_stop, color=color.red, style=line.style_dashed)
-        label.delete(lb_stop)
-        lb_stop := label.new(bar_index + 5, y_stop, "STOP (1.0)\n" + str.tostring(y_stop, "#.##"), color=color(na), textcolor=color.red, style=label.style_label_left, size=size.tiny)
-
-        // 4. TARGET (Extension)
-        line.delete(l_target)
-        l_target := line.new(x1, y_target, bar_index + 5, y_target, color=c_main, style=line.style_dashed)
-        label.delete(lb_target)
-        lb_target := label.new(bar_index + 5, y_target, "TARGET\n" + str.tostring(y_target, "#.##"), color=color(na), textcolor=c_main, style=label.style_label_left, size=size.tiny)
-
-        // 5. ZONE (Box)
-        box.delete(b_zone)
-        b_zone := box.new(x1, y_pivot, bar_index + 5, y_stop, border_color=color(na), bgcolor=c_bg)
-    
-    else
-        // Cleanup if inactive
-        line.delete(l_base)
-        line.delete(l_entry)
-        line.delete(l_stop)
-        line.delete(l_target)
-        label.delete(lb_base)
-        label.delete(lb_entry)
-        label.delete(lb_stop)
-        label.delete(lb_target)
-        box.delete(b_zone)
+// Helper to Update Lines REMOVED (Scope Issue). Logic Inlined below.
 
 // EXECUTE VISUAL UPDATE
 if show_fibs
-    if state_waiting_bos_bull // BULL UPDATE
-        // Calc Levels
-        rng = impulse_level - sweep_level
-        l_en = impulse_level - (rng * c_fib_entry)
-        l_tp = impulse_level + (rng * c_fib_target)
-        // Sweep Tick Index? We don't track sweep index specifically, but we can anchor to 'bar_index - sweep_age'
-        sweep_idx = bar_index - sweep_age
-        f_move_fib(true, true, sweep_idx, impulse_level, l_en, sweep_level, l_tp)
+    // 1. Calculate Coordinates
+    bool active = false
+    bool is_bull = true
+    float y_pivot = na
+    float y_entry = na
+    float y_stop = na
+    float y_target = na
+    int x1 = na
 
-    else if state_waiting_bos_bear // BEAR UPDATE
+    if state_waiting_bos_bull
+        active := true
+        is_bull := true
+        rng = impulse_level - sweep_level
+        y_pivot := impulse_level
+        y_entry := impulse_level - (rng * c_fib_entry)
+        y_target:= impulse_level + (rng * c_fib_target)
+        y_stop  := sweep_level
+        x1      := bar_index - sweep_age
+
+    else if state_waiting_bos_bear
+        active := true
+        is_bull := false
         rng = sweep_level - impulse_level
-        l_en = impulse_level + (rng * c_fib_entry)
-        l_tp = impulse_level - (rng * c_fib_target)
-        sweep_idx = bar_index - sweep_age
-        f_move_fib(true, false, sweep_idx, impulse_level, l_en, sweep_level, l_tp)
+        y_pivot := impulse_level
+        y_entry := impulse_level + (rng * c_fib_entry)
+        y_target:= impulse_level - (rng * c_fib_target)
+        y_stop  := sweep_level
+        x1      := bar_index - sweep_age
+
+    // 2. Clear Old Objects
+    line.delete(l_base)
+    line.delete(l_entry)
+    line.delete(l_stop)
+    line.delete(l_target)
+    label.delete(lb_base)
+    label.delete(lb_entry)
+    label.delete(lb_stop)
+    label.delete(lb_target)
+    box.delete(b_zone)
+
+    // 3. Draw New Objects
+    if active
+        // Color Scheme
+        c_main = is_bull ? c_bull_main : c_bear_main
+        c_bg   = is_bull ? c_bull_bg   : c_bear_bg
         
-    else // HIDE
-        f_move_fib(false, true, 0, 0, 0, 0, 0)
+        // PIVOT (0.0)
+        l_base := line.new(x1, y_pivot, bar_index + 5, y_pivot, color=color.gray, style=line.style_dotted)
+        lb_base := label.new(bar_index + 5, y_pivot, "Avg (0.0)\n" + str.tostring(y_pivot, "#.##"), color=color(na), textcolor=color.gray, style=label.style_label_left, size=size.tiny)
+
+        // ENTRY (0.5)
+        l_entry := line.new(x1, y_entry, bar_index + 5, y_entry, color=c_main, width=2)
+        lb_entry := label.new(bar_index + 5, y_entry, "ENTRY (0.5)\n" + str.tostring(y_entry, "#.##"), color=c_main, textcolor=color.black, style=label.style_label_left, size=size.small)
+
+        // STOP (1.0)
+        l_stop := line.new(x1, y_stop, bar_index + 5, y_stop, color=color.red, style=line.style_dashed)
+        lb_stop := label.new(bar_index + 5, y_stop, "STOP (1.0)\n" + str.tostring(y_stop, "#.##"), color=color(na), textcolor=color.red, style=label.style_label_left, size=size.tiny)
+
+        // TARGET
+        l_target := line.new(x1, y_target, bar_index + 5, y_target, color=c_main, style=line.style_dashed)
+        lb_target := label.new(bar_index + 5, y_target, "TARGET\n" + str.tostring(y_target, "#.##"), color=color(na), textcolor=c_main, style=label.style_label_left, size=size.tiny)
+
+        // ZONE
+        b_zone := box.new(x1, y_pivot, bar_index + 5, y_stop, border_color=color(na), bgcolor=c_bg)
 
 // Dashboard
 var table dash = table.new(position.top_right, 2, 7, bgcolor=color.new(color.black, 40))
