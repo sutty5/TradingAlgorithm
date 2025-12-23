@@ -1,0 +1,29 @@
+Columns: ['Trade #', 'Type', 'Date/Time', 'Signal', 'Price USD', 'Position size (qty)', 'Position size (value)', 'Net P&L USD', 'Net P&L %', 'Run-up USD', 'Run-up %', 'Drawdown USD', 'Drawdown %', 'Cumulative P&L USD', 'Cumulative P&L %']
+
+Trade dates and types:
+  1 | Exit long       | 2025-12-01 19:00:00 | SL                             | 25461.0
+  1 | Entry long      | 2025-12-01 19:00:00 | GodMode Long (Trailed)         | 25476.75
+  2 | Exit long       | 2025-12-02 16:05:00 | SL                             | 25605.75
+  2 | Entry long      | 2025-12-02 16:00:00 | GodMode Long (Trailed)         | 25637.75
+  3 | Exit long       | 2025-12-03 20:35:00 | SL                             | 25667.75
+  3 | Entry long      | 2025-12-03 20:30:00 | GodMode Long                   | 25676.5
+  4 | Exit long       | 2025-12-12 00:00:00 | SL                             | 25666.0
+  4 | Entry long      | 2025-12-11 23:50:00 | GodMode Long (Trailed)         | 25680.0
+  5 | Exit long       | 2025-12-12 00:50:00 | SL                             | 25655.75
+  5 | Entry long      | 2025-12-12 00:35:00 | GodMode Long                   | 25671.0
+  6 | Exit long       | 2025-12-19 21:45:00 | TP                             | 25595.75
+  6 | Entry long      | 2025-12-19 21:15:00 | GodMode Long                   | 25576.0
+  7 | Exit long       | 2025-12-22 18:15:00 | SL                             | 25686.5
+  7 | Entry long      | 2025-12-22 18:05:00 | GodMode Long (Trailed)         | 25706.75
+  8 | Exit long       | 2025-12-22 20:55:00 | SL                             | 25686.0
+  8 | Entry long      | 2025-12-22 20:55:00 | GodMode Long                   | 25693.5
+  9 | Exit long       | 2025-12-22 21:00:00 | TP                             | 25703.5
+  9 | Entry long      | 2025-12-22 21:00:00 | GodMode Long (Trailed)         | 25688.25
+ 10 | Exit long       | 2025-12-22 23:00:00 | TP                             | 25706.5
+ 10 | Entry long      | 2025-12-22 21:25:00 | GodMode Long (Trailed)         | 25696.25
+ 11 | Exit long       | 2025-12-23 19:00:00 | TP                             | 25780.25
+ 11 | Entry long      | 2025-12-23 18:50:00 | GodMode Long                   | 25771.75
+ 12 | Exit long       | 2025-12-23 20:55:00 | TP                             | 25819.0
+ 12 | Entry long      | 2025-12-23 20:55:00 | GodMode Long                   | 25805.5
+ 13 | Exit long       | 2025-12-23 21:00:00 | TP                             | 25820.5
+ 13 | Entry long      | 2025-12-23 21:00:00 | GodMode Long (Trailed)         | 25806.25

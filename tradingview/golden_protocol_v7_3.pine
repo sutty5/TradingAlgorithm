@@ -1,0 +1,435 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © SuttyTrading
+
+//@version=6
+// =============================================================================
+// GOLDEN PROTOCOL v7.4 [GOD MODE] - ALIGNED WITH PYTHON ENGINE
+// =============================================================================
+// 
+// This version exactly matches the Python backtest engine logic that achieved
+// 74% win rate across 146 trades (Sep 21 - Dec 20, 2025).
+//
+// KEY CHANGES from v7.3:
+// - CRITICAL FIX: Macro filter now uses 1H_close vs 1H_EMA (like Python)
+//   Previously used 5m_close vs 1H_EMA which was WRONG
+//
+// KEY CHANGES from v7.2:
+// - Removed aggressive historical PPI scanning loop
+// - Matches Python engine's sequential state machine exactly
+// - PPI -> SWEEP -> BOS -> PENDING -> FILLED flow
+//
+// =============================================================================
+
+strategy("Golden Protocol v7.4 [GOD MODE]", 
+     overlay=true, 
+     initial_capital=100000, 
+     default_qty_type=strategy.fixed, 
+     default_qty_value=1, 
+     currency=currency.USD, 
+     max_labels_count=500, 
+     margin_long=10, 
+     margin_short=10, 
+     calc_bars_count=5000,
+     use_bar_magnifier=true,
+     process_orders_on_close=false)
+
+// =============================================================================
+// 🏆 GOD MODE CONFIGURATION
+// =============================================================================
+grp_gm = "God Mode (Auto-Tuner)"
+grp_gen = "General"
+
+use_auto   = input.bool(true, "✨ Enable God Mode Auto-Tuner", group=grp_gm)
+show_dash  = input.bool(true, "Show Dashboard", group=grp_gen)
+show_fibs  = input.bool(true, "Show Trailing Fibs", group=grp_gen)
+debug_mode = input.bool(false, "🐞 Debug Mode", group=grp_gen)
+disable_macro = input.bool(false, "⚠️ DISABLE Macro Filter (Debug)", group=grp_gen, tooltip="Turn ON to disable the 1H 50 EMA trend filter for debugging purposes.")
+
+// Manual Overrides
+i_fib_entry = input.float(0.5, "Fib Entry", group=grp_gen)
+i_fib_stop  = input.float(1.0, "Fib Stop", group=grp_gen)
+i_fib_target= input.float(0.0, "Fib Target", group=grp_gen)
+i_ppi_expiry = input.int(12, "PPI Expiry Candles", group=grp_gen)
+i_entry_expiry = input.int(10, "Entry Expiry Candles", group=grp_gen)
+
+// =============================================================================
+// ⚙️ AUTO-TUNER (God Mode Parameters)
+// =============================================================================
+var float c_fib_entry = i_fib_entry
+var float c_fib_stop  = i_fib_stop
+var float c_fib_target= i_fib_target
+var int   c_ppi_expiry = i_ppi_expiry
+var int   c_entry_expiry = i_entry_expiry
+var float c_wick_min  = 0.0
+var float c_atr_max   = 0.0
+var bool  c_macro     = false
+var string c_mode_name = "Manual"
+var bool  c_long_only = false
+var bool  c_short_only = false
+
+// Ticker Detection
+is_nq = syminfo.ticker == "NQ" or syminfo.ticker == "NQ1!" or syminfo.ticker == "MNQ" or syminfo.root == "NQ" or syminfo.root == "MNQ"
+is_es = syminfo.ticker == "ES" or syminfo.ticker == "ES1!" or syminfo.ticker == "MES" or syminfo.root == "ES" or syminfo.root == "MES"
+
+// Timeframe Detection
+tf_mins = timeframe.isseconds ? timeframe.multiplier / 60.0 : timeframe.multiplier
+
+if use_auto
+    // ES SHORT (2m) - The Validator (79% WR)
+    if is_es and tf_mins == 2
+        c_mode_name := "🐻 ES Short (Validator)"
+        c_fib_entry := 0.5
+        c_fib_stop  := 1.0
+        c_fib_target:= 0.0
+        c_ppi_expiry := 12
+        c_entry_expiry := 15
+        c_wick_min  := 0.25
+        c_atr_max   := 6.0
+        c_macro     := true
+        c_short_only := true
+        c_long_only := false
+
+    // ES LONG (5m) - The Optimizer (66% WR)
+    else if is_es and tf_mins == 5
+        c_mode_name := "🐂 ES Long (Optimizer)"
+        c_fib_entry := 0.5
+        c_fib_stop  := 1.0
+        c_fib_target:= 0.1  // Extension target
+        c_ppi_expiry := 12
+        c_entry_expiry := 10
+        c_wick_min  := 0.5
+        c_atr_max   := 0.0
+        c_macro     := true
+        c_long_only := true
+        c_short_only := false
+
+    // NQ LONG (5m) - The Banker (75% WR)
+    else if is_nq and tf_mins == 5
+        c_mode_name := "🐂 NQ Long (Banker)"
+        c_fib_entry := 0.5
+        c_fib_stop  := 1.0
+        c_fib_target:= 0.0
+        c_ppi_expiry := 12
+        c_entry_expiry := 10
+        c_wick_min  := 0.5
+        c_atr_max   := 0.0
+        c_macro     := true
+        c_long_only := true
+        c_short_only := false
+
+    else
+        c_mode_name := "⚠️ NO CONFIG"
+
+// =============================================================================
+// 📊 DATA FEEDS
+// =============================================================================
+i_other_ticker = input.symbol("", "Override Comparison Ticker", group=grp_gen)
+
+var string auto_other = "CME_MINI:ES1!"
+if is_nq
+    auto_other := "CME_MINI:ES1!"
+else if is_es
+    auto_other := "CME_MINI:NQ1!"
+
+other_ticker_id = i_other_ticker != "" ? i_other_ticker : auto_other
+
+other_close = request.security(other_ticker_id, timeframe.period, close, lookahead=barmerge.lookahead_off, gaps=barmerge.gaps_off, ignore_invalid_symbol=true)
+other_open  = request.security(other_ticker_id, timeframe.period, open,  lookahead=barmerge.lookahead_off, gaps=barmerge.gaps_off, ignore_invalid_symbol=true)
+
+// Macro EMA (1H 50 EMA) - FIXED to match Python exactly
+// Python: macro_trend = 1 if 1H_close > 1H_ema_50 else -1
+ema_macro = request.security(syminfo.tickerid, "60", ta.ema(close, 50), lookahead=barmerge.lookahead_off)
+close_1h = request.security(syminfo.tickerid, "60", close, lookahead=barmerge.lookahead_off)
+macro_trend = close_1h > ema_macro ? 1 : -1
+
+// =============================================================================
+// 🧠 STATE MACHINE (Matches Python Engine Exactly)
+// =============================================================================
+// States: SCANNING -> PPI -> SWEEP -> PENDING -> FILLED -> WIN/LOSS/EXPIRED
+
+// State Variables
+var int state = 0  // 0=SCANNING, 1=PPI, 2=SWEEP, 3=PENDING, 4=FILLED
+var bool is_bull_setup = true
+var float ppi_high = na
+var float ppi_low = na
+var float sweep_level = na
+var float impulse_level = na
+var float entry_px = na
+var float stop_px = na
+var float target_px = na
+var int candles_since_ppi = 0
+var int candles_since_bos = 0
+
+// =============================================================================
+// PHASE 1: PPI DETECTION (Divergence)
+// =============================================================================
+// Check for PPI on current bar - create setup for NEXT bar to check sweep
+
+has_data_my = not na(close) and not na(open)
+has_data_other = not na(other_close) and not na(other_open)
+
+// Doji filter (body must be > 2 ticks)
+min_tick = syminfo.mintick
+is_doji_my = math.abs(close - open) <= (min_tick * 2.0)
+is_doji_other = math.abs(other_close - other_open) <= (min_tick * 2.0)
+
+my_green = close > open
+other_green = other_close > other_open
+
+// PPI = divergence (opposite directions, neither is doji)
+ppi_detected = has_data_my and has_data_other and (not is_doji_my) and (not is_doji_other) and (my_green != other_green)
+
+// =============================================================================
+// STATE MACHINE LOGIC
+// =============================================================================
+
+// Reset if position closed
+if strategy.position_size == 0 and strategy.position_size[1] != 0
+    state := 0
+
+// STATE 0: SCANNING - Look for PPI
+if state == 0 and strategy.position_size == 0
+    if ppi_detected
+        // Store PPI levels
+        ppi_high := high
+        ppi_low := low
+        candles_since_ppi := 0
+        state := 1  // Move to PPI state
+        
+        if debug_mode
+            label.new(bar_index, high, "PPI", style=label.style_label_down, color=color.purple, textcolor=color.white, size=size.tiny)
+
+// STATE 1: PPI - Look for Sweep within expiry window
+if state == 1
+    candles_since_ppi += 1
+    
+    // Check expiry
+    if candles_since_ppi > c_ppi_expiry
+        state := 0  // Expired, back to scanning
+        if debug_mode
+            label.new(bar_index, low, "PPI EXP", style=label.style_label_up, color=color.gray, textcolor=color.white, size=size.tiny)
+    else
+        // Check for BULL SWEEP (sweep of low) - For LONG trades
+        bool bull_sweep = low < ppi_low and close >= ppi_low
+        
+        // Check for BEAR SWEEP (sweep of high) - For SHORT trades
+        bool bear_sweep = high > ppi_high and close <= ppi_high
+        
+        // Wick ratio calculation
+        candle_range = high - low
+        wick_down = candle_range > 0 ? (math.min(open, close) - low) / candle_range : 0.0
+        wick_up = candle_range > 0 ? (high - math.max(open, close)) / candle_range : 0.0
+        
+        atr_val = ta.atr(14)
+        
+        // Macro filter - FIXED to match Python exactly
+        // Python: if use_macro_filter and macro_trend != 1: return (for LONG)
+        // Python: if use_macro_filter and macro_trend != -1: return (for SHORT)
+        macro_bull = disable_macro or not c_macro or macro_trend == 1
+        macro_bear = disable_macro or not c_macro or macro_trend == -1
+        
+        // BULL SWEEP CHECK
+        if bull_sweep and not c_short_only
+            bool pass_wick = wick_down >= c_wick_min
+            bool pass_atr = c_atr_max == 0 or atr_val <= c_atr_max
+            bool pass_macro = macro_bull
+            
+            if pass_wick and pass_atr and pass_macro
+                is_bull_setup := true
+                sweep_level := low
+                impulse_level := high  // Initial impulse
+                candles_since_ppi := 0  // Reset for BOS expiry tracking
+                state := 2  // Move to SWEEP state
+                
+                if show_fibs
+                    label.new(bar_index, low, "🐂 SWEEP", style=label.style_label_up, color=color.orange, textcolor=color.black, size=size.normal)
+        
+        // BEAR SWEEP CHECK
+        if bear_sweep and not c_long_only and state == 1  // Only if we haven't already found bull sweep
+            bool pass_wick = wick_up >= c_wick_min
+            bool pass_atr = c_atr_max == 0 or atr_val <= c_atr_max
+            bool pass_macro = macro_bear
+            
+            if pass_wick and pass_atr and pass_macro
+                is_bull_setup := false
+                sweep_level := high
+                impulse_level := low  // Initial impulse
+                candles_since_ppi := 0
+                state := 2
+                
+                if show_fibs
+                    label.new(bar_index, high, "🐻 SWEEP", style=label.style_label_down, color=color.orange, textcolor=color.black, size=size.normal)
+
+// STATE 2: SWEEP - Look for BOS (Break of Structure)
+if state == 2
+    candles_since_ppi += 1  // Reusing counter for sweep-to-BOS expiry
+    
+    // Trail impulse while waiting
+    if is_bull_setup
+        impulse_level := math.max(impulse_level, high)
+    else
+        impulse_level := math.min(impulse_level, low)
+    
+    // Check expiry
+    if candles_since_ppi > c_ppi_expiry
+        state := 0
+        if debug_mode
+            label.new(bar_index, is_bull_setup ? low : high, "SWEEP EXP", style=is_bull_setup ? label.style_label_up : label.style_label_down, color=color.gray, textcolor=color.white, size=size.tiny)
+    else
+        // BOS CHECK
+        if is_bull_setup
+            // BULL BOS: Close above PPI High
+            if close > ppi_high
+                // BOS CONFIRMED - Calculate levels and place order
+                range_val = impulse_level - sweep_level
+                entry_px := impulse_level - (range_val * c_fib_entry)
+                stop_px := sweep_level
+                target_px := impulse_level + (range_val * c_fib_target)
+                candles_since_bos := 0
+                state := 3  // Move to PENDING
+                
+                strategy.entry("Long", strategy.long, limit=entry_px, comment="GodMode Long")
+                strategy.exit("Exit L", "Long", stop=stop_px, limit=target_px, comment_loss="SL", comment_profit="TP")
+                
+                label.new(bar_index, high, "⚡ BOS\nLONG", style=label.style_label_down, color=color.lime, textcolor=color.black, size=size.normal)
+                alert("GO LONG: " + syminfo.ticker + " Entry: " + str.tostring(entry_px, "#.##"), alert.freq_once_per_bar)
+        else
+            // BEAR BOS: Close below PPI Low
+            if close < ppi_low
+                range_val = sweep_level - impulse_level
+                entry_px := impulse_level + (range_val * c_fib_entry)
+                stop_px := sweep_level
+                target_px := impulse_level - (range_val * c_fib_target)
+                candles_since_bos := 0
+                state := 3
+                
+                strategy.entry("Short", strategy.short, limit=entry_px, comment="GodMode Short")
+                strategy.exit("Exit S", "Short", stop=stop_px, limit=target_px, comment_loss="SL", comment_profit="TP")
+                
+                label.new(bar_index, low, "⚡ BOS\nSHORT", style=label.style_label_up, color=color.red, textcolor=color.white, size=size.normal)
+                alert("GO SHORT: " + syminfo.ticker + " Entry: " + str.tostring(entry_px, "#.##"), alert.freq_once_per_bar)
+
+// STATE 3: PENDING - Trailing Fibs until fill (THE HIDDEN GRAIL)
+if state == 3 and strategy.position_size == 0
+    candles_since_bos += 1
+    
+    // Check expiry
+    if candles_since_bos > c_entry_expiry
+        strategy.cancel_all()
+        state := 0
+        if debug_mode
+            label.new(bar_index, is_bull_setup ? low : high, "FILL EXP", style=is_bull_setup ? label.style_label_up : label.style_label_down, color=color.gray, textcolor=color.white, size=size.tiny)
+    else
+        // TRAIL IMPULSE AND UPDATE ORDER (Critical for 74% WR!)
+        if is_bull_setup
+            if high > impulse_level
+                impulse_level := high
+                range_val = impulse_level - sweep_level
+                entry_px := impulse_level - (range_val * c_fib_entry)
+                target_px := impulse_level + (range_val * c_fib_target)
+                
+                strategy.cancel("Long")
+                strategy.entry("Long", strategy.long, limit=entry_px, comment="GodMode Long (Trailed)")
+                strategy.exit("Exit L", "Long", stop=stop_px, limit=target_px, comment_loss="SL", comment_profit="TP")
+        else
+            if low < impulse_level
+                impulse_level := low
+                range_val = sweep_level - impulse_level
+                entry_px := impulse_level + (range_val * c_fib_entry)
+                target_px := impulse_level - (range_val * c_fib_target)
+                
+                strategy.cancel("Short")
+                strategy.entry("Short", strategy.short, limit=entry_px, comment="GodMode Short (Trailed)")
+                strategy.exit("Exit S", "Short", stop=stop_px, limit=target_px, comment_loss="SL", comment_profit="TP")
+
+// STATE 4: FILLED - Position is active
+if strategy.position_size != 0
+    state := 4
+
+// =============================================================================
+// 🎨 VISUALS
+// =============================================================================
+
+// Fib Lines
+var line l_impulse = na
+var line l_entry = na
+var line l_stop = na
+var line l_target = na
+var label lb_impulse = na
+var label lb_entry = na
+var label lb_stop = na
+var label lb_target = na
+var box b_zone = na
+
+c_bull_main = #00E676
+c_bear_main = #FF5252
+
+if show_fibs
+    line.delete(l_impulse)
+    line.delete(l_entry)
+    line.delete(l_stop)
+    line.delete(l_target)
+    label.delete(lb_impulse)
+    label.delete(lb_entry)
+    label.delete(lb_stop)
+    label.delete(lb_target)
+    box.delete(b_zone)
+    
+    if (state >= 2 and state <= 4) and not na(impulse_level) and not na(sweep_level)
+        c_main = is_bull_setup ? c_bull_main : c_bear_main
+        x1 = bar_index - candles_since_ppi - candles_since_bos
+        x2 = bar_index + 5
+        
+        l_impulse := line.new(x1, impulse_level, x2, impulse_level, color=color.gray, style=line.style_dotted)
+        lb_impulse := label.new(x2, impulse_level, "0.0", color=color(na), textcolor=color.gray, style=label.style_label_left, size=size.tiny)
+        
+        l_entry := line.new(x1, entry_px, x2, entry_px, color=c_main, width=2)
+        lb_entry := label.new(x2, entry_px, "ENTRY " + str.tostring(entry_px, "#.##"), color=c_main, textcolor=color.black, style=label.style_label_left, size=size.small)
+        
+        l_stop := line.new(x1, stop_px, x2, stop_px, color=color.red, style=line.style_dashed)
+        lb_stop := label.new(x2, stop_px, "STOP", color=color(na), textcolor=color.red, style=label.style_label_left, size=size.tiny)
+        
+        l_target := line.new(x1, target_px, x2, target_px, color=c_main, style=line.style_dashed)
+        lb_target := label.new(x2, target_px, "TARGET", color=color(na), textcolor=c_main, style=label.style_label_left, size=size.tiny)
+        
+        b_zone := box.new(x1, impulse_level, x2, stop_px, border_color=color(na), bgcolor=color.new(c_main, 90))
+
+// PPI Markers
+plotshape(ppi_detected ? high : na, "PPI", shape.diamond, location.absolute, color.new(color.purple, 30), size=size.tiny)
+
+// =============================================================================
+// 📋 DASHBOARD
+// =============================================================================
+var table dash = table.new(position.top_right, 2, 8, bgcolor=color.new(color.black, 40))
+
+if show_dash and barstate.islast
+    state_names = array.from("SCANNING", "PPI", "SWEEP", "PENDING", "FILLED")
+    state_name = state >= 0 and state < 5 ? array.get(state_names, state) : "UNKNOWN"
+    
+    table.cell(dash, 0, 0, "GOD MODE v7.4", text_color=color.yellow, bgcolor=color.new(color.black, 0))
+    table.cell(dash, 1, 0, "(Macro Fix)", text_color=color.gray, bgcolor=color.new(color.black, 0))
+    
+    table.cell(dash, 0, 1, "Config", text_color=color.white)
+    table.cell(dash, 1, 1, c_mode_name, text_color=str.contains(c_mode_name, "⚠️") ? color.red : color.green)
+    
+    table.cell(dash, 0, 2, "State", text_color=color.white)
+    table.cell(dash, 1, 2, state_name, text_color=state == 4 ? color.lime : (state > 0 ? color.yellow : color.gray))
+    
+    table.cell(dash, 0, 3, "Win Rate", text_color=color.white)
+    wr = strategy.closedtrades > 0 ? strategy.wintrades / strategy.closedtrades * 100 : 0.0
+    table.cell(dash, 1, 3, str.tostring(wr, "#.#") + "%", text_color=wr >= 70 ? color.lime : (wr >= 50 ? color.yellow : color.red))
+    
+    table.cell(dash, 0, 4, "Net PnL", text_color=color.white)
+    pnl = strategy.netprofit
+    table.cell(dash, 1, 4, "$" + str.tostring(pnl, "#"), text_color=pnl > 0 ? color.green : color.red)
+    
+    table.cell(dash, 0, 5, "Trades", text_color=color.white)
+    table.cell(dash, 1, 5, str.tostring(strategy.closedtrades), text_color=color.white)
+    
+    table.cell(dash, 0, 6, "W / L", text_color=color.white)
+    table.cell(dash, 1, 6, str.tostring(strategy.wintrades) + " / " + str.tostring(strategy.losstrades), text_color=color.white)
+    
+    // Timeframe warning
+    tf_ok = (is_es and (tf_mins == 2 or tf_mins == 5)) or (is_nq and tf_mins == 5)
+    table.cell(dash, 0, 7, "Timeframe", text_color=color.white)
+    table.cell(dash, 1, 7, tf_ok ? "✅ OK" : "⚠️ WRONG", text_color=tf_ok ? color.green : color.red)

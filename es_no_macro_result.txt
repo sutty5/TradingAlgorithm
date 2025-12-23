@@ -1,0 +1,1 @@
+{'trades': 2, 'wins': 1, 'wr': 50.0, 'pnl': np.float64(12.5)}

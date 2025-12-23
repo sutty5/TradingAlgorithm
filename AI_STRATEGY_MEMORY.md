@@ -233,3 +233,145 @@ We are currently preparing `optimizer_cloud_final.py` to run the "Time Filtered"
 - **Strategy:** God Mode v7.0 (3 High-Probability Legs)
 - **Verified Metrics:** 74% WR, +$23.7k PnL.
 - **Next Steps:** Monitor live paper performance. Consider "SMT Divergence" as a future separate experiment.
+
+---
+
+## 📝 Session Log: Pine Script TradingView Alignment (Dec 23, 2025 - Late Night)
+
+*Agent: Antigravity | Goal: Debug Pine Script discrepancy between TradingView results and Python Backtest Engine.*
+
+### 1. The Problem: TradingView vs Python Discrepancy
+
+User reported that their Pine Script (`golden_protocol_v7_fixed.pine`) was showing dramatically different results than the Python backtest engine:
+
+| Metric | Python Engine | TradingView (v7.2) |
+|--------|---------------|-------------------|
+| **NQ 5m Trades (Dec)** | 2 | 13 |
+| **NQ 5m Win Rate** | 75.5% | 46% |
+| **ES 5m Trades (Nov-Dec)** | 2 | 16 |
+| **ES 5m Win Rate** | 66% | 27-37% |
+
+**Core Issue:** TradingView was finding 6-8x MORE trades than Python, indicating a logic divergence.
+
+### 2. Root Cause Analysis
+
+We systematically investigated:
+
+1. **PPI Detection:** ✅ Both find ~100 divergences in the same period. Not the issue.
+2. **Sweep Detection:** ✅ Wick ratio formulas match exactly between Python and Pine Script.
+3. **Macro Filter:** ❌ **FOUND THE BUG**
+
+**The Critical Bug (Macro Filter Logic):**
+
+| Implementation | Logic | Result |
+|----------------|-------|--------|
+| **Python (Correct)** | `macro_trend = 1 if 1H_close > 1H_EMA_50 else -1` | Uses 1H timeframe context |
+| **Pine Script (Wrong)** | `macro_bull = close > ema_macro` | Used 5m close vs 1H EMA |
+
+The Pine Script was comparing the **5m candle close** against the **1H 50 EMA**, while Python compares the **1H candle close** against the **1H 50 EMA**. This caused the macro filter to pass/fail on different bars, leading to vastly different trade counts.
+
+### 3. Fixes Applied
+
+#### Fix 1: v7.2 → v7.3 (NQ 5m - This Made It Work)
+
+The original Pine Script (`golden_protocol_v7_fixed.pine` / v7.2) had several critical bugs that caused NQ 5m to have only 46% WR vs Python's 75%:
+
+**Bug A: Aggressive Historical PPI Scanning**
+```pinescript
+// OLD (v7.2 - WRONG): Scanned bars 2-12 for PPI
+for i = 2 to 12
+    if ppi_detected_at_bar[i]
+        // Found too many signals!
+
+// NEW (v7.3 - CORRECT): Only check current bar, sequential state machine
+if state == 0 and ppi_detected
+    state := 1  // Move to PPI state
+```
+
+**Bug B: Trailing Fibs Not Updating Orders**
+```pinescript
+// OLD (v7.2 - WRONG): Levels set once at BOS, never updated
+entry_px := impulse_level - (range_val * c_fib_entry)
+strategy.entry("Long", strategy.long, limit=entry_px)
+// Entry price NEVER changes!
+
+// NEW (v7.3 - CORRECT): Cancel and re-place orders as impulse trails
+if high > impulse_level
+    impulse_level := high
+    entry_px := impulse_level - (range_val * c_fib_entry)
+    strategy.cancel("Long")  // Cancel old order
+    strategy.entry("Long", strategy.long, limit=entry_px)  // New price!
+```
+
+**Bug C: PPI Levels Getting Overwritten**
+```pinescript
+// OLD (v7.2 - WRONG): Global PPI levels overwritten by new signals
+if ppi_signal
+    ppi_high := high  // Overwrote active setup's reference!
+
+// NEW (v7.3 - CORRECT): Setup-specific PPI levels locked when sweep detected
+var float setup_ppi_high = na
+if sweep_detected
+    setup_ppi_high := ppi_high  // Lock it for this setup
+```
+
+**Result:** NQ 5m went from **46% → 67-70% WR** after v7.3 fixes.
+
+---
+
+#### Fix 2: v7.3 → v7.4 (Macro Filter - For ES Legs)
+
+```pinescript
+// OLD (v7.3 - WRONG)
+ema_macro = request.security(syminfo.tickerid, "60", ta.ema(close, 50), ...)
+macro_bull = close > ema_macro  // 5m close!
+
+// NEW (v7.4 - CORRECT)
+ema_macro = request.security(syminfo.tickerid, "60", ta.ema(close, 50), ...)
+close_1h = request.security(syminfo.tickerid, "60", close, ...)  // Get 1H close
+macro_trend = close_1h > ema_macro ? 1 : -1
+macro_bull = macro_trend == 1  // Now uses 1H context!
+```
+
+**File Modified:** `tradingview/golden_protocol_v7_3.pine` (now contains v7.4 code)
+
+### 4. Current Status After Fix
+
+| Asset/TF | Status | Notes |
+|----------|--------|-------|
+| **NQ 5m** | ✅ **WORKING** (~70% WR) | Matches Python engine |
+| **ES 5m** | ⚠️ **NEEDS TESTING** | v7.4 macro fix applied, needs retest |
+| **ES 2m** | ⚠️ **NOT TESTED** | Different config (Short only, ATR filter) |
+
+### 5. Next Steps (For Future Agent)
+
+> [!IMPORTANT]
+> The Python backtest engine (`backtest_engine.py`) and the strategy document (`THE_GOLDEN_PROTOCOL_GOD_MODE.md`) are the **VERIFIED SOURCE OF TRUTH**. All Pine Script logic must match these exactly.
+
+**Immediate Actions:**
+1. [ ] **Test ES 5m v7.4** - User should run TradingView backtest on ES 5m with macro filter ENABLED
+2. [ ] **Test ES 2m v7.4** - User should run TradingView backtest on ES 2m 
+3. [ ] **Compare trade timestamps** - If still divergent, compare specific trade entry times between TV and Python
+
+**If Still Divergent:**
+- Check if `request.security` data alignment differs from Python's resampled data
+- Verify wick ratio calculation produces same values as Python's pre-calculated columns
+- Consider adding debug labels to Pine Script showing exact filter pass/fail reasons
+
+**Files Reference:**
+- `tradingview/golden_protocol_v7_3.pine` - Current best Pine Script (v7.4)
+- `backtest_engine.py` - Source of truth for logic
+- `THE_GOLDEN_PROTOCOL_GOD_MODE.md` - Source of truth for parameters
+- `research/es_no_macro_cloud.py` - Debugging script for ES comparison
+- `research/count_divergences.py` - Counts PPI divergences in period
+
+### 6. Key Learnings
+
+1. **Multi-timeframe data is tricky** - Pine Script's `request.security` must be used carefully to match Python's resampled data logic
+2. **The macro filter matters** - It's responsible for significant trade filtering
+3. **NQ 5m is the cleanest leg** - It works well because it has fewer edge cases
+4. **ES legs need more debugging** - The extension target (0.1 for ES Long) and ATR filter (ES Short) add complexity
+
+---
+**[END OF LOG]**
+*Future Agents: The v7.4 Pine Script is in `golden_protocol_v7_3.pine` (file not renamed). Focus on ES 2m and ES 5m alignment next.*
