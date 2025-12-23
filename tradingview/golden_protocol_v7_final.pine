@@ -146,6 +146,8 @@ filter_bear = not (c_macro and use_macro) or close < ema_macro
 
 // DEBUG: Filter Bypass & Labels
 debug_mode = input.bool(false, "🐞 Debug Mode (Show All Sweeps)", group=grp_gen)
+debug_force_market = input.bool(false, "🚀 Force Market Entry (Debug)", group=grp_gen, tooltip="If checked, enters at MARKET on BOS instead of Limit.")
+
 if debug_mode
     c_wick_min := 0.0
     c_atr_max := 0.0
@@ -302,12 +304,16 @@ if state_waiting_bos_bull
         target_px = impulse_level + (range_val * c_fib_target)
         
         // EXECUTE
-        strategy.entry("Long", strategy.long, limit=entry_px, comment="GodMode Long")
+        if debug_force_market
+            strategy.entry("Long", strategy.long, comment="GodMode Long MKT")
+        else
+            strategy.entry("Long", strategy.long, limit=entry_px, comment="GodMode Long")
+            
         strategy.exit("Exit L", "Long", stop=stop_px, limit=target_px, comment_loss="SL", comment_profit="TP")
         
         // Debug Entry
         if debug_mode
-            f_dbg_label("🚀 LONG LIMIT SENT\n@" + str.tostring(entry_px), high, color.blue)
+            f_dbg_label("🚀 LONG " + (debug_force_market ? "MARKET" : "LIMIT") + " SENT\n@" + str.tostring(entry_px), high, color.blue)
 
         // Reset
         state_waiting_bos_bull := false
@@ -336,12 +342,16 @@ if state_waiting_bos_bear
         target_px = impulse_level - (range_val * c_fib_target)
         
         // EXECUTE
-        strategy.entry("Short", strategy.short, limit=entry_px, comment="GodMode Short")
+        if debug_force_market
+            strategy.entry("Short", strategy.short, comment="GodMode Short MKT")
+        else
+            strategy.entry("Short", strategy.short, limit=entry_px, comment="GodMode Short")
+
         strategy.exit("Exit S", "Short", stop=stop_px, limit=target_px, comment_loss="SL", comment_profit="TP")
         
         // Debug Entry
         if debug_mode
-            f_dbg_label("🚀 SHORT LIMIT SENT\n@" + str.tostring(entry_px), low, color.blue)
+            f_dbg_label("🚀 SHORT " + (debug_force_market ? "MARKET" : "LIMIT") + " SENT\n@" + str.tostring(entry_px), low, color.blue)
 
         // Reset
         state_waiting_bos_bear := false
