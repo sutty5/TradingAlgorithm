@@ -257,7 +257,6 @@ if ppi_age > 0 and ppi_age <= 12
 // States
 var bool state_waiting_bos_bull = false
 var bool state_waiting_bos_bear = false
-var label lbl_trail = na // Dynamic Trailing Label
 
 // Reset on new Sweep
 if is_sweep_bull
@@ -281,19 +280,9 @@ if state_waiting_bos_bull
     // Update Impulse (High)
     impulse_level := math.max(nz(impulse_level, high), high)
     
-    // Dynamic Entry Calc for Visuals
-    rng_v = impulse_level - sweep_level
-    ent_v = impulse_level - (rng_v * c_fib_entry)
-    
-    // Update Floating Label
-    if show_fibs
-        label.delete(lbl_trail)
-        lbl_trail := label.new(bar_index + 3, ent_v, "ENTRY: " + str.tostring(ent_v, "#.##"), style=label.style_label_left, color=color.green, textcolor=color.white, size=size.small)
-
     sweep_age += 1
     if sweep_age > c_expiry
         state_waiting_bos_bull := false
-        label.delete(lbl_trail) // Cleanup
 
     // Check BOS (Close above PPI High)
     if close > ppi_high
@@ -308,7 +297,6 @@ if state_waiting_bos_bull
         
         // Reset
         state_waiting_bos_bull := false
-        label.delete(lbl_trail) // Cleanup on execution
         
         alert("GO LONG: " + syminfo.ticker + " @ " + str.tostring(entry_px), alert.freq_once_per_bar)
 
@@ -316,19 +304,9 @@ if state_waiting_bos_bear
     // Update Impulse (Low)
     impulse_level := math.min(nz(impulse_level, low), low)
     
-    // Dynamic Entry Calc for Visuals
-    rng_v = sweep_level - impulse_level
-    ent_v = impulse_level + (rng_v * c_fib_entry)
-    
-    // Update Floating Label
-    if show_fibs
-        label.delete(lbl_trail)
-        lbl_trail := label.new(bar_index + 3, ent_v, "ENTRY: " + str.tostring(ent_v, "#.##"), style=label.style_label_left, color=color.red, textcolor=color.white, size=size.small)
-    
     sweep_age += 1
     if sweep_age > c_expiry
         state_waiting_bos_bear := false
-        label.delete(lbl_trail)
 
     // Check BOS (Close below PPI Low)
     if close < ppi_low
@@ -343,39 +321,103 @@ if state_waiting_bos_bear
         
         // Reset
         state_waiting_bos_bear := false
-        label.delete(lbl_trail)
         
         alert("GO SHORT: " + syminfo.ticker + " @ " + str.tostring(entry_px), alert.freq_once_per_bar)
 
 // Plot Trailing Fibs (Ghost Lines) with Shading
 // Only show if we are in waiting state
 
-// Calculate Projected Targets for Viz
-bull_rng = impulse_level - sweep_level
-bull_tgt = impulse_level + (bull_rng * c_fib_target)
+// =============================================================================
+// 🎨 ADVANCED VISUALS (Pro Fib Tool)
+// =============================================================================
 
-bear_rng = sweep_level - impulse_level
-bear_tgt = impulse_level - (bear_rng * c_fib_target)
+// We use 'var' lines/labels so we can update them live (no repainting, just moving).
+var line l_base   = na
+var line l_entry  = na
+var line l_stop   = na
+var line l_target = na
 
-// BULL CONFIG
-show_bull = show_fibs and state_waiting_bos_bull
+var label lb_base  = na
+var label lb_entry = na
+var label lb_stop  = na
+var label lb_target= na
 
-p_b_pi = plot(show_bull ? impulse_level : na, "Bull Pivot (0.0)", color=color.gray, style=plot.style_line) 
-p_b_en = plot(show_bull ? (impulse_level - bull_rng*0.5) : na, "Bull Entry (0.5)", color=color.new(color.green, 20), style=plot.style_line, linewidth=2)
-p_b_sl = plot(show_bull ? sweep_level : na, "Bull Stop (1.0)", color=color.red, style=plot.style_line) 
-p_b_tp = plot(show_bull ? bull_tgt : na, "Bull Target", color=color.lime, style=plot.style_line, linewidth=1)
+var box b_zone = na // The "Fill" Zone
 
-fill(p_b_pi, p_b_sl, color=color.new(color.green, 90), title="Bull Fib Zone")
+// Colors (Pro Palette)
+c_bull_main = #00E676 // Bright Teal/Green
+c_bull_bg   = color.new(#00E676, 90)
+c_bear_main = #FF5252 // Bright Red/Orange
+c_bear_bg   = color.new(#FF5252, 90)
+c_text      = color.white
 
-// BEAR CONFIG
-show_bear = show_fibs and state_waiting_bos_bear
+// Helper to Update Lines
+f_move_fib(active, is_bull, x1, y_pivot, y_entry, y_stop, y_target) =>
+    if active
+        // Determine Color
+        c_main = is_bull ? c_bull_main : c_bear_main
+        c_bg   = is_bull ? c_bull_bg   : c_bear_bg
+        
+        // 1. PIVOT (0.0)
+        line.delete(l_base)
+        l_base := line.new(x1, y_pivot, bar_index + 5, y_pivot, color=color.gray, style=line.style_dotted)
+        label.delete(lb_base)
+        lb_base := label.new(bar_index + 5, y_pivot, "Avg (0.0)\n" + str.tostring(y_pivot, "#.##"), color=color(na), textcolor=color.gray, style=label.style_label_left, size=size.tiny)
 
-p_r_pi = plot(show_bear ? impulse_level : na, "Bear Pivot (0.0)", color=color.gray, style=plot.style_line) 
-p_r_en = plot(show_bear ? (impulse_level + bear_rng*0.5) : na, "Bear Entry (0.5)", color=color.new(color.red, 20), style=plot.style_line, linewidth=2)
-p_r_sl = plot(show_bear ? sweep_level : na, "Bear Stop (1.0)", color=color.red, style=plot.style_line)
-p_r_tp = plot(show_bear ? bear_tgt : na, "Bear Target", color=color.lime, style=plot.style_line, linewidth=1)
+        // 2. ENTRY (0.5) - Emphasized
+        line.delete(l_entry)
+        l_entry := line.new(x1, y_entry, bar_index + 5, y_entry, color=c_main, width=2)
+        label.delete(lb_entry)
+        lb_entry := label.new(bar_index + 5, y_entry, "ENTRY (0.5)\n" + str.tostring(y_entry, "#.##"), color=c_main, textcolor=color.black, style=label.style_label_left, size=size.small)
 
-fill(p_r_pi, p_r_sl, color=color.new(color.red, 90), title="Bear Fib Zone")
+        // 3. STOP (1.0)
+        line.delete(l_stop)
+        l_stop := line.new(x1, y_stop, bar_index + 5, y_stop, color=color.red, style=line.style_dashed)
+        label.delete(lb_stop)
+        lb_stop := label.new(bar_index + 5, y_stop, "STOP (1.0)\n" + str.tostring(y_stop, "#.##"), color=color(na), textcolor=color.red, style=label.style_label_left, size=size.tiny)
+
+        // 4. TARGET (Extension)
+        line.delete(l_target)
+        l_target := line.new(x1, y_target, bar_index + 5, y_target, color=c_main, style=line.style_dashed)
+        label.delete(lb_target)
+        lb_target := label.new(bar_index + 5, y_target, "TARGET\n" + str.tostring(y_target, "#.##"), color=color(na), textcolor=c_main, style=label.style_label_left, size=size.tiny)
+
+        // 5. ZONE (Box)
+        box.delete(b_zone)
+        b_zone := box.new(x1, y_pivot, bar_index + 5, y_stop, border_color=color(na), bgcolor=c_bg)
+    
+    else
+        // Cleanup if inactive
+        line.delete(l_base)
+        line.delete(l_entry)
+        line.delete(l_stop)
+        line.delete(l_target)
+        label.delete(lb_base)
+        label.delete(lb_entry)
+        label.delete(lb_stop)
+        label.delete(lb_target)
+        box.delete(b_zone)
+
+// EXECUTE VISUAL UPDATE
+if show_fibs
+    if state_waiting_bos_bull // BULL UPDATE
+        // Calc Levels
+        rng = impulse_level - sweep_level
+        l_en = impulse_level - (rng * c_fib_entry)
+        l_tp = impulse_level + (rng * c_fib_target)
+        // Sweep Tick Index? We don't track sweep index specifically, but we can anchor to 'bar_index - sweep_age'
+        sweep_idx = bar_index - sweep_age
+        f_move_fib(true, true, sweep_idx, impulse_level, l_en, sweep_level, l_tp)
+
+    else if state_waiting_bos_bear // BEAR UPDATE
+        rng = sweep_level - impulse_level
+        l_en = impulse_level + (rng * c_fib_entry)
+        l_tp = impulse_level - (rng * c_fib_target)
+        sweep_idx = bar_index - sweep_age
+        f_move_fib(true, false, sweep_idx, impulse_level, l_en, sweep_level, l_tp)
+        
+    else // HIDE
+        f_move_fib(false, true, 0, 0, 0, 0, 0)
 
 // Dashboard
 var table dash = table.new(position.top_right, 2, 7, bgcolor=color.new(color.black, 40))
