@@ -43,8 +43,9 @@ var bool  c_macro     = false
 var string c_mode_name = "Manual"
 
 // Helper to determine Ticker Root
-is_nq = syminfo.ticker == "NQ" or syminfo.ticker == "NQ1!" or syminfo.ticker == "MNQ" or syminfo.ticker == "QQQ"
-is_es = syminfo.ticker == "ES" or syminfo.ticker == "ES1!" or syminfo.ticker == "MES" or syminfo.ticker == "SPY"
+// Helper to determine Ticker Root
+is_nq = syminfo.ticker == "NQ" or syminfo.ticker == "NQ1!" or syminfo.ticker == "MNQ" or syminfo.ticker == "QQQ" or syminfo.root == "NQ" or syminfo.root == "MNQ"
+is_es = syminfo.ticker == "ES" or syminfo.ticker == "ES1!" or syminfo.ticker == "MES" or syminfo.ticker == "SPY" or syminfo.root == "ES" or syminfo.root == "MES"
 
 // Detect Timeframe (in minutes)
 tf_mins = timeframe.multiplier / (timeframe.isseconds ? 60 : 1)
@@ -307,6 +308,19 @@ plot(show_fibs and state_waiting_bos_bull ? (impulse_level - (impulse_level-swee
 
 plot(show_fibs and state_waiting_bos_bear ? impulse_level : na, "Bear Impulse", color=color.gray)
 plot(show_fibs and state_waiting_bos_bear ? (impulse_level + (sweep_level-impulse_level)*0.5) : na, "Bear Entry 50%", color=color.red, style=plot.style_cross)
+
+// DEBUG PLOTS (To diagnose "No Trade" issues)
+var float debug_entry_target = na
+if state_waiting_bos_bull // Calculate dynamic entry for visualization
+    rng = impulse_level - sweep_level
+    debug_entry_target := impulse_level - (rng * c_fib_entry)
+else if state_waiting_bos_bear
+    rng = sweep_level - impulse_level
+    debug_entry_target := impulse_level + (rng * c_fib_entry)
+else
+    debug_entry_target := na
+
+plot(debug_entry_target, "Dynamic Limit Target", color=color.new(color.yellow, 0), style=plot.style_circles)
 
 // Dashboard
 var table dash = table.new(position.top_right, 2, 7, bgcolor=color.new(color.black, 40))
