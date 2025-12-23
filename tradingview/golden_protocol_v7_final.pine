@@ -98,6 +98,14 @@ if use_auto
         c_mode_name := "⚠️ NO GOD MODE CONFIG"
 
 // =============================================================================
+// 🎨 VISUALS
+// =============================================================================
+
+// Plot PPI with Enhanced Visibility
+plotshape(ppi_high, "PPI High", shape.grouponcircles, location.absolute, color.new(color.red, 30), size=size.tiny, offset=0)
+plotshape(ppi_low, "PPI Low", shape.grouponcircles, location.absolute, color.new(color.green, 30), size=size.tiny, offset=0)
+
+// =============================================================================
 // 🧠 CORE STRATEGY LOGIC
 // =============================================================================
 
@@ -264,14 +272,14 @@ if is_sweep_bull
     state_waiting_bos_bear := false 
     // Visual: Sweep Label
     if show_fibs
-        label.new(bar_index, low, "🐂 SWEEP", style=label.style_label_up, color=color.green, textcolor=color.white, size=size.small)
+        label.new(bar_index, low, "🐂 SWEEP", style=label.style_label_up, color=color.green, textcolor=color.white, size=size.normal)
 
 if is_sweep_bear
     state_waiting_bos_bear := true
     state_waiting_bos_bull := false
     // Visual: Sweep Label
     if show_fibs
-        label.new(bar_index, high, "🐻 SWEEP", style=label.style_label_down, color=color.red, textcolor=color.white, size=size.small)
+        label.new(bar_index, high, "🐻 SWEEP", style=label.style_label_down, color=color.red, textcolor=color.white, size=size.normal)
 
 // Trailing logic (Update Impulse while waiting)
 var float impulse_level = na
@@ -287,6 +295,9 @@ if state_waiting_bos_bull
     // Check BOS (Close above PPI High)
     if close > ppi_high
         // EXECUTION LOGIC (MATCHES SPEC)
+        // Visual: BOS Marker
+        label.new(bar_index, high, "⚡ BOS\nLONG", color=color.lime, style=label.style_label_down, textcolor=color.black, size=size.normal)
+        
         range_val = impulse_level - sweep_level
         entry_px  = impulse_level - (range_val * c_fib_entry)
         stop_px   = sweep_level  
@@ -311,6 +322,9 @@ if state_waiting_bos_bear
     // Check BOS (Close below PPI Low)
     if close < ppi_low
         // EXECUTION LOGIC
+        // Visual: BOS Marker
+        label.new(bar_index, low, "⚡ BOS\nSHORT", color=color.red, style=label.style_label_up, textcolor=color.white, size=size.normal)
+        
         range_val = sweep_level - impulse_level
         entry_px  = impulse_level + (range_val * c_fib_entry)
         stop_px   = sweep_level 
