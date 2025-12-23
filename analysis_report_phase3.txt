@@ -1,0 +1,37 @@
+
+--- PHASE 3 SCIENTIFIC VALIDATION RESULTS ---
+  asset direction  use_trailing_fib  fib_target         wr           pnl     trades  timeframe_minutes
+1    ES      LONG              True         0.1  59.934060   4294.152273  41.545455                 11
+0    ES      LONG              True         0.0  57.822363   3276.051786  47.285714                 14
+2    ES     SHORT              True         0.0  61.169384   5734.345833  75.128205                 39
+3    ES     SHORT              True         0.1  59.442319   6930.078125  80.562500                 16
+4    NQ      LONG              True         0.0  60.980925   8361.351250  60.375000                 24
+5    NQ      LONG              True         0.1  57.672055  10325.666667  67.333333                  9
+6    NQ     SHORT              True         0.0  59.029167   8585.337000  56.950000                 20
+7    NQ     SHORT              True         0.1  56.352364   5215.957000  61.000000                  5
+
+--- WINNER SELECTION (Top 3 Configs per Leg) ---
+
+ES SHORT:
+       wr      pnl  trades  use_trailing_fib  fib_target  timeframe_minutes  fib_stop  entry_expiry_candles
+75.925926 7843.750      54              True         0.0                  2     1.000                    15
+74.074074 7143.750      54              True         0.0                  2     1.000                    10
+73.214286 7190.475      56              True         0.0                  2     0.893                    15
+
+ES LONG:
+       wr     pnl  trades  use_trailing_fib  fib_target  timeframe_minutes  fib_stop  entry_expiry_candles
+65.000000 4111.25      40              True         0.1                  5       1.0                    10
+63.414634 2887.50      41              True         0.0                  5       1.0                    10
+62.500000 3968.75      40              True         0.1                  5       1.0                    15
+
+NQ SHORT:
+       wr     pnl  trades  use_trailing_fib  fib_target  timeframe_minutes  fib_stop  entry_expiry_candles
+62.500000 10152.5      48              True         0.0                  5       1.0                    15
+62.025316  7862.5      79              True         0.0                  2       1.0                    15
+62.025316  7862.5      79              True         0.0                  2       1.0                    10
+
+NQ LONG:
+       wr     pnl  trades  use_trailing_fib  fib_target  timeframe_minutes  fib_stop  entry_expiry_candles
+71.428571 12120.0      56              True         0.0                  5       1.0                    10
+70.909091 11832.5      55              True         0.0                  5       1.0                    15
+67.647059  9270.0      34              True         0.0                  5       1.0                    15

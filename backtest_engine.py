@@ -110,6 +110,9 @@ class BacktestConfig:
     use_macro_filter: bool = False     # If True, trade only in direction of 1H Trend
     require_bb_expansion: bool = False # If True, require BB Width expansion
     entry_mode: str = "FIB"            # FIB, SWEEP, BREAKUP
+    
+    # v7.0 Scientific Validation
+    use_trailing_fib: bool = True      # If True, fibs update with price (v4.6+). If False, fixed at BOS (Original).
 
 
 @dataclass
@@ -192,31 +195,28 @@ def calculate_fib_levels(
         # Bearish
         if config.entry_mode == "SWEEP":
             # SWEEP MODE: Limit at Sweep High (Retest)
-            # Stop: 1.0 (Sweep High) ?? No, if we enter AT Sweep High, stop must be higher.
-            # Stop: 1.272 Ext? Or Fixed points? 
-            # Let's use 10 points for now for "Sniper" retest. Or Fib Extension 1.272.
-            # IMPOSSIBLE RISK FREE? No.
-            # Let's say Stop is Sweep High + (Range * 0.272)
+            # Stop: 1.272 Ext or similar.
             fib_ext = fib_1 + (fib_range * 0.272)
-            entry = fib_1 # Enter at the top
+            entry = fib_1 
             stop = fib_ext
             target = fib_0
             
         elif config.entry_mode == "BREAKUP":
-            # BREAKOUT MODE: We trade the BREAK of the PPI High.
-            # Entry: PPI High + Filter?
-            # Stop: PPI Low? Or midpoint?
-            # This logic is fundamentally different (Trend Following).
-            # Let's stick to Reversion logic for now (SWEEP/FIB).
             entry = fib_0 + config.fib_entry * fib_range
             stop = fib_1
             target = fib_0 
             
         else:
             # FIB MODE (Standard)
-            entry = fib_0 + config.fib_entry * fib_range   # 0.5 fib
-            stop = fib_1                                    # 1.0 fib (sweep extreme)
-            target = fib_0                                  # 0.0 fib (impulse end)
+            entry = fib_0 + config.fib_entry * fib_range   # e.g., 0.5
+            
+            # Stop Logic:
+            # fib_1 is 1.0 (Sweep High). fib_0 is 0.0 (Low).
+            # stop = 0.0 + (stop_fib * range). e.g. 0.893 -> 0 + 0.893*R.
+            stop = fib_0 + (config.fib_stop * fib_range)
+            
+            # Target Logic:
+            target = fib_0 - (config.fib_target * fib_range)
 
     else:
         # Bullish
@@ -229,9 +229,17 @@ def calculate_fib_levels(
             
         else:
             # FIB MODE (Standard)
-            entry = fib_0 - config.fib_entry * fib_range   # 0.5 fib
-            stop = fib_1                                    # 1.0 fib (sweep extreme)
-            target = fib_0                                  # 0.0 fib (impulse end)
+            entry = fib_0 - config.fib_entry * fib_range   # e.g. 0.5
+            
+            # Stop Logic:
+            # fib_1 is 1.0 (Sweep Low). fib_0 is High (0.0).
+            # Stop is BELOW Entry.
+            # stop = fib_0 - (stop_fib * range). e.g. 0.893 -> High - 0.893*R.
+            # If Stop is 1.0: High - 1.0*R = Low. Correct.
+            stop = fib_0 - (config.fib_stop * fib_range)
+            
+            # Target Logic:
+            target = fib_0 + (config.fib_target * fib_range)
     
     return entry, stop, target
 
@@ -494,28 +502,30 @@ class GoldenProtocolBacktest:
         trade.candles_since_bos += 1
         
         # First: Update trailing Fib range (before checking fill)
-        if trade.sweep_direction == TradeDirection.SHORT:
-            # Bearish: fib_0 trails lowest low
-            if candle['low'] < trade.fib_0:
-                trade.fib_0 = candle['low']
-                # Recalculate levels
-                entry, stop, target = calculate_fib_levels(
-                    trade.fib_0, trade.fib_1, trade.sweep_direction, self.config
-                )
-                trade.entry_price = entry
-                trade.stop_price = stop
-                trade.target_price = target
-        else:
-            # Bullish: fib_0 trails highest high
-            if candle['high'] > trade.fib_0:
-                trade.fib_0 = candle['high']
-                # Recalculate levels
-                entry, stop, target = calculate_fib_levels(
-                    trade.fib_0, trade.fib_1, trade.sweep_direction, self.config
-                )
-                trade.entry_price = entry
-                trade.stop_price = stop
-                trade.target_price = target
+        # Only if trailing is enabled (v4.6+ behavior)
+        if self.config.use_trailing_fib:
+            if trade.sweep_direction == TradeDirection.SHORT:
+                # Bearish: fib_0 trails lowest low
+                if candle['low'] < trade.fib_0:
+                    trade.fib_0 = candle['low']
+                    # Recalculate levels
+                    entry, stop, target = calculate_fib_levels(
+                        trade.fib_0, trade.fib_1, trade.sweep_direction, self.config
+                    )
+                    trade.entry_price = entry
+                    trade.stop_price = stop
+                    trade.target_price = target
+            else:
+                # Bullish: fib_0 trails highest high
+                if candle['high'] > trade.fib_0:
+                    trade.fib_0 = candle['high']
+                    # Recalculate levels
+                    entry, stop, target = calculate_fib_levels(
+                        trade.fib_0, trade.fib_1, trade.sweep_direction, self.config
+                    )
+                    trade.entry_price = entry
+                    trade.stop_price = stop
+                    trade.target_price = target
         
         # Check for entry fill (price touches entry level)
         if trade.sweep_direction == TradeDirection.SHORT:

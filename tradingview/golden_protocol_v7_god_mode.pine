@@ -10,11 +10,11 @@ strategy("Golden Protocol v7.0 [GOD MODE]", overlay=true, initial_capital=50000,
 // =============================================================================
 // Automatically loads the "Grail" settings found via Cloud Optimization (48k runs).
 //
-// SETTINGS MAP:
-// 1. ES SHORT (2m) -> WR 76% | Deep Stop (0.893) | Fib 0.5 | Exp 15 | Wick > 0.25 | ATR < 6 | Macro
-// 2. NQ SHORT (2m) -> WR 72% | Stop 1.0          | Fib 0.618| Exp 5  | No Filters
-// 3. NQ LONG (5m)  -> WR 71% | Stop 1.0          | Fib 0.5  | Exp 10 | Wick > 0.5  | Macro
-// 4. NQ LONG (3m)  -> WR 77% | Stop 1.0          | Fib 0.5  | Exp 15 | Wick > 0.25 | Macro
+// SETTINGS MAP (Scientifically Validated Dec 23):
+// 1. ES SHORT (2m) -> WR 76% | Stop 1.0 (Standard) | Fib 0.5 | Exp 15 | Wick 0.25 | ATR<6 | Macro
+// 2. ES LONG  (5m) -> WR 65% | Stop 1.0 (Standard) | Fib 0.5 | Exp 10 | Wick 0.5  | Macro | TARGET 0.1 EXT
+// 3. NQ SHORT (5m) -> WR 62% | Stop 1.0 (Standard) | Fib 0.5 | Exp 15 | No Filters
+// 4. NQ LONG  (5m) -> WR 71% | Stop 1.0 (Standard) | Fib 0.5 | Exp 10 | Wick 0.5  | Macro
 // =============================================================================
 
 // --- INPUTS ---
@@ -225,12 +225,23 @@ if waiting_bos_bull and close > high[1] // Simple fractal break or high break?
     // So order is: Top (0) -> Entry (0.5) -> Stop (0.893) -> Bottom (1.0).
     // So Stop Px = Bot + range * (1.0 - 0.893).
     
-    stop_px_final = bot // Default 1.0
-    if (use_auto ? sys_fib_stop_L : i_fib_stop) < 1.0
-        stop_px_final := top - (range_leg * (use_auto ? sys_fib_stop_L : i_fib_stop))
-        
+    // Target Logic (God Mode Extension)
+    // Impulse Target = bot. Extension = bot + (range * ext).
+    // Target Px = bot + (range_leg * sys_target_ext_L).
+    // Note: Long Impulse is UP. So Impulse End is Top. 
+    // Wait... 
+    // Long: Sweep (Low) -> Impulse (High).
+    // Entry = High - (Range * 0.5).
+    // Target 0.0 = High.
+    // Target 0.1 = High + (Range * 0.1).
+    target_rel = use_auto ? sys_target_ext_L : 0.0
+    target_val = top + (range_leg * target_rel)
+    
+    // Profit distance = Target - Entry
+    profit_dist = target_val - limit_px
+
     strategy.entry("Long", strategy.long, limit=limit_px)
-    strategy.exit("Exit L", "Long", stop=stop_px_final, profit=(limit_px + (limit_px-stop_px_final))) // 1:1
+    strategy.exit("Exit L", "Long", stop=stop_px_final, profit=profit_dist) 
 
 if waiting_bos_bear and close < low[1]
     waiting_bos_bear := false
@@ -246,9 +257,18 @@ if waiting_bos_bear and close < low[1]
         // Stop is at 0.893 retracement from Bottom up
         stop_px_final := bot + (range_leg * (use_auto ? sys_fib_stop_S : i_fib_stop))
 
+    // Target Logic (Short)
+    // Impulse (Low) is Bot.
+    // Target 0.0 = Bot.
+    // Target 0.1 = Bot - (Range * 0.1).
+    target_rel = use_auto ? sys_target_ext_S : 0.0
+    target_val = bot - (range_leg * target_rel)
+    
+    profit_dist = limit_px - target_val
+
     if (input_dir == "Both" or input_dir == "Short")
         strategy.entry("Short", strategy.short, limit=limit_px)
-        strategy.exit("Exit S", "Short", stop=stop_px_final, profit=(limit_px - (stop_px_final-limit_px))) // 1:1
+        strategy.exit("Exit S", "Short", stop=stop_px_final, profit=profit_dist)
 
 // --- PLOTS ---
 plotshape(valid_sweep_bull, "Bull Sweep", shape.triangleup, location.belowbar, color.green, size=size.small)

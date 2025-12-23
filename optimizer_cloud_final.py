@@ -120,24 +120,29 @@ def main(action: str = "optimize"):
     print("Generating Configurations...")
     
     # --- MASSSIVE GRID SEARCH SPACE (Expanded per User Request & Original Protocol) ---
-    timeframes = [1, 2, 3, 5, 15] # added 1m and 15m
-    fibs = [0.5, 0.55, 0.618, 0.65, 0.786] # expanded fibs
+    # Pruned to focus on Trailing vs Static A/B Test while maintaining key God Mode legs
+    timeframes = [2, 5] # Focus on the winners
+    fibs = [0.5, 0.618] # Focus on the winners
     fib_stops = [1.0, 0.893] # Standard vs Original Deep Stop
-    expiries = [3, 5, 7, 10, 15] # expanded timing
-    wicks = [0.0, 0.25, 0.35, 0.5] # testing wick rejection
-    atrs = [0.0, 4.0, 6.0, 8.0] # volatility
-    rvols = [0.0, 1.2, 2.0] # volume spikes
+    expiries = [5, 10, 15] # God Mode winners
+    wicks = [0.0, 0.25, 0.5] # Wick rejection levels
+    atrs = [0.0, 6.0] # Volatility check
+    rvols = [0.0] # Pruned rvol for now to save space
     macros = [False, True] # trend alignment
-    breakevens = [0.0, 0.5] # Test Fixed vs BE
+    breakevens = [0.0] # Pruned BE for now (focus on Trailing mechanics first)
+    
+    # NEW: Phase 3 Scientific Validation Parameters
+    trailing_ops = [True, False] # The Big Question: Static or Dynamic?
+    target_ops = [0.0, 0.1] # The Big Question: Impulse or Extended?
     
     configs = []
     # Cartesian Product
-    for tf, fib, fstop, exp, wick, atr, rvol, mac, be in itertools.product(timeframes, fibs, fib_stops, expiries, wicks, atrs, rvols, macros, breakevens):
+    for tf, fib, fstop, exp, wick, atr, rvol, mac, be, trail, targ in itertools.product(timeframes, fibs, fib_stops, expiries, wicks, atrs, rvols, macros, breakevens, trailing_ops, target_ops):
         cfg = {
             "timeframe_minutes": tf,
             "fib_entry": fib,
             "fib_stop": fstop, 
-            "fib_target": 0.0, # Testing High/Low target (Classic 1:1 if entry 0.5, stop 1.0)
+            "fib_target": targ, # Testing High/Low target vs Extension
             "entry_expiry_candles": exp,
             "min_wick_ratio": wick,
             "max_atr": atr,
@@ -145,7 +150,8 @@ def main(action: str = "optimize"):
             "breakeven_trigger_r": be, 
             "use_macro_filter": mac,
             "require_bb_expansion": False,
-            "entry_mode": "FIB"
+            "entry_mode": "FIB",
+            "use_trailing_fib": trail
         }
         configs.append(cfg)
         

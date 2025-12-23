@@ -76,6 +76,7 @@ class StrategyConfig:
     fib_entry: float
     fib_stop: float
     expiry_candles: int
+    fib_target: float = 0.0 # Default 0.0 (Impulse End). 0.1 = Extension.
     min_wick: float = 0.0
     max_atr: float = 0.0
     
@@ -84,17 +85,19 @@ class StrategyConfig:
     def is_long(self): return self.direction == OrderSide.BUY
 
 # --- STRATEGY CONFIGURATIONS (GOD MODE) ---
+# --- STRATEGY CONFIGURATIONS (GOD MODE - VALIDATED DEC 23) ---
 CONFIGS = [
-    # 1. NQ SHORT (The Alpha) - 2m
+    # 1. NQ SHORT (The Alpha) - 5m (Moved from 2m for higher PnL/Robustness)
     StrategyConfig(
-        name="NQ_SHORT_2m_ALPHA",
+        name="NQ_SHORT_5m_ALPHA",
         target_symbol=SYMBOL_NQ,
         ref_symbol=SYMBOL_ES,
-        timeframe=2,
+        timeframe=5,
         direction=OrderSide.SELL,
-        fib_entry=0.618,
+        fib_entry=0.5,
         fib_stop=1.0, 
-        expiry_candles=5,
+        fib_target=0.0,
+        expiry_candles=15,
         min_wick=0.0
     ),
     # 2. NQ LONG (The Banker) - 5m
@@ -106,21 +109,37 @@ CONFIGS = [
         direction=OrderSide.BUY,
         fib_entry=0.5,
         fib_stop=1.0,
+        fib_target=0.0,
         expiry_candles=10,
         min_wick=0.5 
     ),
     # 3. ES SHORT (The Validator) - 2m
     StrategyConfig(
-        name="ES_SHORT_2m_DEEP",
+        name="ES_SHORT_2m_VALIDATOR",
         target_symbol=SYMBOL_ES,
         ref_symbol=SYMBOL_NQ,
         timeframe=2,
         direction=OrderSide.SELL,
         fib_entry=0.5,
-        fib_stop=0.893, # Deep Stop
+        fib_stop=1.0, # Standardized to 1.0
+        fib_target=0.0,
         expiry_candles=15,
         min_wick=0.25,
-        max_atr=6.0 # Not implemented in dry run but recorded
+        max_atr=6.0
+    ),
+    # 4. ES LONG (The Optimizer) - 5m
+    StrategyConfig(
+        name="ES_LONG_5m_OPTIMIZER",
+        target_symbol=SYMBOL_ES,
+        ref_symbol=SYMBOL_NQ,
+        timeframe=5,
+        direction=OrderSide.BUY,
+        fib_entry=0.5,
+        fib_stop=1.0,
+        fib_target=0.1, # EXTENSION TARGET
+        expiry_candles=10,
+        min_wick=0.5,
+        max_atr=0.0
     )
 ]
 
@@ -280,22 +299,20 @@ class StrategyInstance:
             # Entry 0.5. Stop 0.893 is HIGHER up. 
             # Correct.
             stop_px = impulse + (frange * self.cfg.fib_stop)
-            # Target (0.0) -> Impulse Low
-            target_px = impulse 
+            # Target Logic: Impulse (Low) is 0.0. Extension (0.1) is LOWER.
+            # Target = Impulse - (Range * fib_target)
+            target_px = impulse - (frange * self.cfg.fib_target)
             
         else: # Long
-            # 0 is Top (Impulse)? No. Longs impulse is UP.
-            # Usually: 0 is Impulse High (Target). 1 is Bottom (Extreme).
-            # Retracement goes down from 0 towards 1.
-            # Entry 0.5. Stop 0.893 is LOWER/Deeper.
-            # Stop Px = Top - (Range * 0.893).
-            # Wait, easier math:
-            # Bot = Stop Level (Extreme). Top = Impulse.
+            # 0 is Top (Impulse). 1 is Bottom (Extreme).
             # Entry = Top - (Range * 0.5)
             # Stop Px = Top - (Range * StopFib) 
+            # Target Logic: Impulse (High) is 0.0. Extension (0.1) is HIGHER.
+            # Target = Impulse + (Range * fib_target)
+            
             entry = impulse - (frange * self.cfg.fib_entry)
             stop_px = impulse - (frange * self.cfg.fib_stop)
-            target_px = impulse
+            target_px = impulse + (frange * self.cfg.fib_target)
             
         # Sizing
         risk = abs(entry - stop_px)
