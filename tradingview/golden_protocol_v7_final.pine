@@ -21,6 +21,7 @@ use_auto   = input.bool(true, "✨ Enable God Mode Auto-Tuner", group=grp_gm, to
 show_dash  = input.bool(true, "Show Dashboard", group=grp_gen)
 show_fibs  = input.bool(true, "Show Trailing Fibs", group=grp_gen)
 risk_reward= input.bool(true, "Show R:R Labels", group=grp_gen)
+use_macro  = input.bool(true, "Use Macro Trend Filter (1H EMA)", group=grp_gen, tooltip="If unchecked, trades will be taken regardless of 1H Trend.")
 
 // Manual Overrides (Used if Auto is OFF or for unlabeled tickers)
 i_fib_entry = input.float(0.5, "Fib Entry (Manual)", group=grp_gen)
@@ -140,8 +141,8 @@ else
 // God Mode specs say "Macro Trend". Let's use 50 EMA on 1H as standard Proxy.
 // Use 'barmerge.gaps_on' to prevent na repainting issues if desired, but gaps_off is standard for indicators.
 ema_macro = request.security(syminfo.tickerid, "60", ta.ema(close, 50), lookahead=barmerge.lookahead_off)
-filter_bull = not c_macro or close > ema_macro
-filter_bear = not c_macro or close < ema_macro
+filter_bull = not (c_macro and use_macro) or close > ema_macro
+filter_bear = not (c_macro and use_macro) or close < ema_macro
 
 // DEBUG: Filter Bypass & Labels
 debug_mode = input.bool(false, "🐞 Debug Mode (Show All Sweeps)", group=grp_gen)
