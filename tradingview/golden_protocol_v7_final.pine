@@ -178,12 +178,23 @@ if ppi_age > 0 and ppi_age <= 12
         wick = get_wick(open, close, high, low, -1)
         atr  = ta.atr(14)
         // Check Filters
-        if wick >= c_wick_min and (c_atr_max == 0 or atr <= c_atr_max) and filter_bull
-            // Check Config Direction (ES Short Mode shouldn't take Longs etc)
-            // Implicit: logic below handles direction check via mode name or just takes all valid?
-            // "God Mode" implies we ONLY take the direction specified for that Asset/TF.
-            
-            // Direction Check:
+        pass_wick = wick >= c_wick_min
+        pass_atr  = (c_atr_max == 0 or atr <= c_atr_max)
+        pass_macro= filter_bull
+        
+        // Debug
+        if debug_mode and not (pass_wick and pass_atr and pass_macro)
+            fail_reason = ""
+            if not pass_wick 
+                fail_reason += "Wick " + str.tostring(wick, "#.##") + " < " + str.tostring(c_wick_min) + "\n"
+            if not pass_atr
+                fail_reason += "ATR " + str.tostring(atr, "#.##") + " > " + str.tostring(c_atr_max) + "\n"
+            if not pass_macro
+                fail_reason += "Macro Fail\n"
+            f_dbg_label("🚫 PRE-FILTER FAIL:\n" + fail_reason, low, color.orange)
+
+        if pass_wick and pass_atr and pass_macro
+            // Check Config Direction (God Mode Spec)
             is_valid_dir = false
             if use_auto
                 if str.contains(c_mode_name, "Long")
@@ -195,13 +206,32 @@ if ppi_age > 0 and ppi_age <= 12
                 is_sweep_bull := true
                 sweep_level := low
                 sweep_age := 0
+                if debug_mode
+                    f_dbg_label("✅ SWEEP ACCEPTED", low, color.green)
+            else if debug_mode
+                f_dbg_label("🚫 DIR FAIL (Mode: " + c_mode_name + ")", low, color.orange)
 
     // BEAR SWEEP (Sweep High)
     if high > ppi_high and close < ppi_high
         wick = get_wick(open, close, high, low, 1)
         atr  = ta.atr(14)
         
-        if wick >= c_wick_min and (c_atr_max == 0 or atr <= c_atr_max) and filter_bear
+        pass_wick = wick >= c_wick_min
+        pass_atr  = (c_atr_max == 0 or atr <= c_atr_max)
+        pass_macro= filter_bear
+        
+        // Debug
+        if debug_mode and not (pass_wick and pass_atr and pass_macro)
+            fail_reason = ""
+            if not pass_wick 
+                fail_reason += "Wick " + str.tostring(wick, "#.##") + " < " + str.tostring(c_wick_min) + "\n"
+            if not pass_atr
+                fail_reason += "ATR " + str.tostring(atr, "#.##") + " > " + str.tostring(c_atr_max) + "\n"
+            if not pass_macro
+                fail_reason += "Macro Fail\n"
+            f_dbg_label("🚫 PRE-FILTER FAIL:\n" + fail_reason, high, color.orange)
+        
+        if pass_wick and pass_atr and pass_macro
             // Direction Check
             is_valid_dir = false
             if use_auto
@@ -214,6 +244,10 @@ if ppi_age > 0 and ppi_age <= 12
                 is_sweep_bear := true
                 sweep_level := high
                 sweep_age := 0
+                if debug_mode
+                    f_dbg_label("✅ SWEEP ACCEPTED", high, color.green)
+            else if debug_mode
+                f_dbg_label("🚫 DIR FAIL (Mode: " + c_mode_name + ")", high, color.orange)
 
 // 4. BOS (Break of Structure) & ENTRY
 // We wait for a CLOSE beyond the opposite PPI level.
