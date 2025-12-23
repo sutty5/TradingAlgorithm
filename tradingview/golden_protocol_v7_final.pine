@@ -21,7 +21,6 @@ use_auto   = input.bool(true, "✨ Enable God Mode Auto-Tuner", group=grp_gm, to
 show_dash  = input.bool(true, "Show Dashboard", group=grp_gen)
 show_fibs  = input.bool(true, "Show Trailing Fibs", group=grp_gen)
 risk_reward= input.bool(true, "Show R:R Labels", group=grp_gen)
-risk_reward= input.bool(true, "Show R:R Labels", group=grp_gen)
 
 // Manual Overrides (Used if Auto is OFF or for unlabeled tickers)
 i_fib_entry = input.float(0.5, "Fib Entry (Manual)", group=grp_gen)
