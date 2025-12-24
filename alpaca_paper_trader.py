@@ -13,7 +13,7 @@ from collections import deque
 # Alpaca SDK
 from alpaca.data.live import StockDataStream
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest, TakeProfitRequest, StopLossRequest
+from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, TakeProfitRequest, StopLossRequest
 from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass
 from alpaca.common.exceptions import APIError
 from alpaca.data.historical import StockHistoricalDataClient
@@ -477,11 +477,12 @@ class AlpacaPaperTrader:
         if self.dry_run:
             return
             
-        req = MarketOrderRequest(
+        req = LimitOrderRequest(
             symbol=signal['symbol'],
             qty=signal['qty'],
             side=signal['side'],
             time_in_force=TimeInForce.DAY,
+            limit_price=signal['entry'],
             order_class=OrderClass.BRACKET,
             take_profit=TakeProfitRequest(limit_price=signal['target']),
             stop_loss=StopLossRequest(stop_price=signal['stop'])
