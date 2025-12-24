@@ -266,8 +266,13 @@ def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df_1h['ema_1h_50'] = df_1h['close'].ewm(span=50, adjust=False).mean()
     df_1h['macro_trend'] = np.where(df_1h['close'] > df_1h['ema_1h_50'], 1, -1)
     
+    # CRITICAL FIX: Shift by 1 to prevent lookahead
+    # The value for 13:00-14:00 (closed 13:59) is only available at 14:00+
+    # So 13:00 timestamp should get the PREVIOUS hour's trend
+    df_1h_shifted = df_1h.shift(1)
+    
     # Reindex back to original index (ffill)
-    df['macro_trend'] = df_1h['macro_trend'].reindex(df.index, method='ffill')
+    df['macro_trend'] = df_1h_shifted['macro_trend'].reindex(df.index, method='ffill')
     
     # Bollinger Bands (Expansion Check)
     # Standard: 20, 2

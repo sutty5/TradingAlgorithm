@@ -1,0 +1,69 @@
+
+================================================================================
+VERIFYING FIXED LOGIC - DEC 18 TRADE (Shifted Macro)
+================================================================================
+FAILURE: 'shift(1)' NOT found in load_and_prepare_data source code!
+ligned candles: {len(common_idx):,}")
+    print(f"  Date range: {common_idx.min()} to {common_idx.max()}")
+    
+    # Add technical indicators
+    print("Calculating technical indicators (EMA/ATR)...")
+    es_ohlcv = add_technical_indicators(es_ohlcv)
+    nq_ohlcv = add_technical_indicators(nq_ohlcv)
+    
+    # SAVE TO CACHE
+    print("Saving to cache...")
+    es_ohlcv.to_parquet(es_cache_path)
+    nq_ohlcv.to_parquet(nq_cache_path)
+    print("  Cache saved.")
+    
+    return es_ohlcv, nq_ohlcv
+
+Data points: 675
+
+--- Macro Trend Check (12:40 - 13:20) ---
+2025-12-18 12:40:00+00:00 | Rate: 6753.75 | Macro: -1 | ATR: 1.41 | WickUp: 0.00
+2025-12-18 12:42:00+00:00 | Rate: 6755.50 | Macro: -1 | ATR: 1.48 | WickUp: 0.00
+2025-12-18 12:44:00+00:00 | Rate: 6753.50 | Macro: -1 | ATR: 1.59 | WickUp: 0.11
+2025-12-18 12:46:00+00:00 | Rate: 6754.75 | Macro: -1 | ATR: 1.66 | WickUp: 0.00
+2025-12-18 12:48:00+00:00 | Rate: 6754.25 | Macro: -1 | ATR: 1.71 | WickUp: 0.50
+2025-12-18 12:50:00+00:00 | Rate: 6754.00 | Macro: -1 | ATR: 1.62 | WickUp: 0.75
+2025-12-18 12:52:00+00:00 | Rate: 6753.50 | Macro: -1 | ATR: 1.66 | WickUp: 0.25
+2025-12-18 12:54:00+00:00 | Rate: 6753.00 | Macro: -1 | ATR: 1.64 | WickUp: 0.33
+2025-12-18 12:56:00+00:00 | Rate: 6753.75 | Macro: -1 | ATR: 1.64 | WickUp: 0.00
+2025-12-18 12:58:00+00:00 | Rate: 6753.50 | Macro: -1 | ATR: 1.59 | WickUp: 0.33
+2025-12-18 13:00:00+00:00 | Rate: 6756.75 | Macro: 1 | ATR: 1.64 | WickUp: 0.00
+2025-12-18 13:02:00+00:00 | Rate: 6755.25 | Macro: 1 | ATR: 1.68 | WickUp: 0.00
+2025-12-18 13:04:00+00:00 | Rate: 6753.50 | Macro: 1 | ATR: 1.68 | WickUp: 0.17
+2025-12-18 13:06:00+00:00 | Rate: 6749.75 | Macro: 1 | ATR: 1.89 | WickUp: 0.00
+2025-12-18 13:08:00+00:00 | Rate: 6753.25 | Macro: 1 | ATR: 2.07 | WickUp: 0.00
+2025-12-18 13:10:00+00:00 | Rate: 6753.50 | Macro: 1 | ATR: 2.05 | WickUp: 0.67
+2025-12-18 13:12:00+00:00 | Rate: 6755.50 | Macro: 1 | ATR: 2.04 | WickUp: 0.00
+2025-12-18 13:14:00+00:00 | Rate: 6756.75 | Macro: 1 | ATR: 2.00 | WickUp: 0.00
+2025-12-18 13:16:00+00:00 | Rate: 6756.75 | Macro: 1 | ATR: 2.02 | WickUp: 0.86
+2025-12-18 13:18:00+00:00 | Rate: 6756.25 | Macro: 1 | ATR: 2.00 | WickUp: 0.67
+2025-12-18 13:20:00+00:00 | Rate: 6756.50 | Macro: 1 | ATR: 1.95 | WickUp: 0.20
+
+--- Running Backtest ---
+
+Trades found: 20
+Trade: None | None | TradeState.EXPIRED
+Trade: None | None | TradeState.EXPIRED
+Trade: None | None | TradeState.EXPIRED
+Trade: None | None | TradeState.EXPIRED
+Trade: None | None | TradeState.EXPIRED
+Trade: 2025-12-18 01:36:00+00:00 | TradeDirection.SHORT | TradeState.WIN
+Trade: 2025-12-18 02:04:00+00:00 | TradeDirection.SHORT | TradeState.LOSS
+Trade: None | None | TradeState.EXPIRED
+Trade: None | None | TradeState.EXPIRED
+Trade: None | None | TradeState.EXPIRED
+Trade: None | None | TradeState.EXPIRED
+Trade: None | None | TradeState.EXPIRED
+Trade: None | None | TradeState.EXPIRED
+Trade: None | None | TradeState.EXPIRED
+Trade: None | None | TradeState.EXPIRED
+Trade: None | None | TradeState.EXPIRED
+Trade: None | None | TradeState.EXPIRED
+Trade: None | None | TradeState.EXPIRED
+Trade: None | TradeDirection.SHORT | TradeState.EXPIRED
+Trade: None | TradeDirection.SHORT | TradeState.EXPIRED
