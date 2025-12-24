@@ -258,7 +258,7 @@ if state == STATE_PENDING
         // Price goes up to 0. Retraces to 0.382.
         // Correct.
         target_price := impulse_origin // High (0.0)
-        stop_ref     := impulse_end    // Low (1.0 base)
+        // stop_ref removed
         
         // But wait, our Stop Fib is 1.15.
         // So actual Stop Price = High - (Range * 1.15)
@@ -272,7 +272,7 @@ if state == STATE_PENDING
         // Entry at 0.382 means it retraced 38% of the way back up.
         // So Entry = Low + (Range * 0.382)
         target_price := impulse_origin // Low (0.0)
-        stop_ref     := impulse_end    // High (1.0 base)
+        // stop_ref removed
         
         entry_price := impulse_origin + (price_range * fib_entry_level)
         stop_price  := impulse_origin + (price_range * fib_stop_level) // 1.15 is ABOVE high
