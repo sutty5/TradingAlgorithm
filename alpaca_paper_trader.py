@@ -32,8 +32,8 @@ SYMBOL_NQ = "QQQ"
 SYMBOL_ES = "SPY"
 
 # Global Risk
-RISK_PER_TRADE = 400.0 
-MAX_POSITION_SIZE_USD = 90000.0 # Safety Cap (Keep under $100k standard paper limit for single trade)
+RISK_PER_TRADE_PCT = 2.0  # Risk 2% of account equity per trade
+BUYING_POWER_MARGIN = 0.95 # Use 95% of available buying power max
 
 logging.basicConfig(
     level=logging.INFO,
@@ -237,19 +237,34 @@ class StrategyInstance:
         self.cfg = config
         self.state = TradeState.SCANNING
         self.ppi_data = {}
+        self.age = 0 # Age of PPI in candles
         self.logger = logging.getLogger(f"STRAT_{config.name}")
         
-    def on_candles(self, target_c: Candle, ref_c: Candle, macro_dir: int) -> Optional[Dict]:
+    def _reset(self):
+        self.state = TradeState.SCANNING
+        self.ppi_data = {}
+        self.age = 0
+        self.logger.info(f"♻️ Strategy {self.cfg.name} reset to SCANNING.")
+
+    def on_candles(self, target: Candle, ref: Candle, macro_dir: int, equity: float = 100000.0, buying_power: float = 400000.0) -> Optional[Dict]:
         """Called when matched candles for this TF are ready."""
         
-        self.logger.debug(f"Tick: {target_c.close} / {ref_c.close} | Macro: {macro_dir}")
+        self.logger.debug(f"Tick: {target.close} / {ref.close} | Macro: {macro_dir}")
+
+        # Age check for PPI/Sweep states
+        if self.state in [TradeState.PPI, TradeState.SWEEP]:
+            self.age += 1
+            if self.age > self.cfg.expiry_candles:
+                self.logger.info(f"⏰ Strategy {self.cfg.name} Expired ({self.age} candles)")
+                self._reset()
+                return None
 
         if self.state == TradeState.SCANNING:
-            return self._check_ppi(target_c, ref_c)
+            return self._check_ppi(target, ref)
         elif self.state == TradeState.PPI:
-            return self._check_sweep(target_c, macro_dir)
+            return self._check_sweep(target, macro_dir)
         elif self.state == TradeState.SWEEP:
-            return self._check_bos(target_c)
+            return self._check_bos(target, equity, buying_power)
         # Pending/Filled handled externally or reset? 
         # For simple bot, auto-reset after fill logic passed up.
         return None
@@ -261,18 +276,13 @@ class StrategyInstance:
             self.ppi_data = {
                 'high': target.high,
                 'low': target.low,
-                'age': 0
             }
+            self.age = 0 # Reset age for new PPI
             self.logger.info(f"💥 PPI Detected on {self.cfg.name}")
             self.state = TradeState.PPI
         return None
 
     def _check_sweep(self, target: Candle, macro_dir: int):
-        self.ppi_data['age'] += 1
-        if self.ppi_data['age'] > 12:
-            self.state = TradeState.SCANNING
-            return None
-            
         # Check Directional Sweep
         # Short Strategy -> Sweep High
         if self.cfg.is_short():
@@ -313,7 +323,7 @@ class StrategyInstance:
                     return None
         return None
 
-    def _check_bos(self, target: Candle):
+    def _check_bos(self, target: Candle, equity: float, buying_power: float):
         # Expiry Check (TODO: Implement proper BOS expiry logic if different from total age)
         # Using broad aging for now.
         
@@ -321,17 +331,17 @@ class StrategyInstance:
             # BOS = Break below PPI Low
             if target.close < self.ppi_data['low']:
                 self.logger.info(f"⚡ BOS Confirmed ({self.cfg.name})")
-                return self._create_signal(target)
+                return self._create_signal(target, equity, buying_power)
                 
         elif self.cfg.is_long():
             # BOS = Break above PPI High
             if target.close > self.ppi_data['high']:
                 self.logger.info(f"⚡ BOS Confirmed ({self.cfg.name})")
-                return self._create_signal(target)
+                return self._create_signal(target, equity, buying_power)
                 
         return None
 
-    def _create_signal(self, trigger_candle: Candle):
+    def _create_signal(self, trigger_candle: Candle, equity: float, buying_power: float):
         # Calc Levels
         stop_level = self.ppi_data['sweep_extreme']
         impulse = trigger_candle.low if self.cfg.is_short() else trigger_candle.high
@@ -368,20 +378,25 @@ class StrategyInstance:
             target_px = impulse + (frange * self.cfg.fib_target)
             
         # Sizing
-        risk = abs(entry - stop_px)
+        risk_per_share = abs(entry - stop_px)
         qty = 0
-        if risk > 0.01:
-            raw_qty = RISK_PER_TRADE / risk
+        if risk_per_share > 0.01:
+            # Dynamic Risk Calculation
+            risk_amount = (equity * RISK_PER_TRADE_PCT) / 100.0
+            raw_qty = risk_amount / risk_per_share
             
-            # Safety Cap: Check Notional Value
+            # Capacity Check (Buying Power)
             notional = raw_qty * entry
-            if notional > MAX_POSITION_SIZE_USD:
-                self.logger.warning(f"⚠️ Initial Qty {int(raw_qty)} (${notional:,.2f}) exceeds Max Position Size. Clamping.")
-                qty = int(MAX_POSITION_SIZE_USD / entry)
+            capacity = buying_power * BUYING_POWER_MARGIN
+            
+            if notional > capacity:
+                self.logger.warning(f"⚠️ Buying Power Limit! Required ${notional:,.2f} but capacity is ${capacity:,.2f}. Clamping.")
+                qty = int(capacity / entry)
             else:
                 qty = int(raw_qty)
                 
-            self.logger.info(f"💎 SIZING: Risk ${RISK_PER_TRADE} | Qty {qty} | Notional ${qty*entry:,.2f}")
+            actual_risk = qty * risk_per_share
+            self.logger.info(f"💎 SIZING: Equity ${equity:,.2f} | Risk Amount ${risk_amount:,.2f} | Qty {qty} | Actual Risk ${actual_risk:,.2f}")
             
         self.state = TradeState.FILLED # Stop firing
         
@@ -448,28 +463,32 @@ class AlpacaPaperTrader:
         other_candle = self.pending_candles[tf].get(other_sym)
         
         if other_candle and other_candle.timestamp == candle.timestamp:
-            logger.info(f"Processing {tf}m Logic for {candle.timestamp}")
-            await self._run_logic(tf, self.pending_candles[tf][SYMBOL_NQ], self.pending_candles[tf][SYMBOL_ES])
+            logger.info(f"🔄 TF {tf}m Synced: {candle.timestamp}")
             
-            # Clear? No, keep until overwritten?
-            # Creating a 'processed_timestamps' set is safer, 
-            # but simple overwrite works as long as logic is idempotent per bar.
-            # Strategy state handles idempotency.
+            # Fetch Account Info for Dynamic Sizing
+            try:
+                account = self.client.get_account()
+                equity = float(account.equity)
+                buying_power = float(account.buying_power)
+            except Exception as e:
+                logger.error(f"❌ Failed to fetch account data: {e}")
+                equity = 100000.0 # Default fallback for safety
+                buying_power = 400000.0
             
-    async def _run_logic(self, tf: int, nq: Candle, es: Candle):
-        # Run all strategies that match this TF
-        for strat in self.strategies:
-            if strat.cfg.timeframe == tf:
-                # Determine Target/Ref
-                target = nq if strat.cfg.target_symbol == SYMBOL_NQ else es
-                ref = es if strat.cfg.target_symbol == SYMBOL_NQ else nq
-                
-                # Update Macro
-                macro_dir = self.macro.update()
-                
-                signal = strat.on_candles(target, ref, macro_dir)
-                if signal:
-                    await self._execute(signal)
+            # Update Macro
+            macro_dir = self.macro.update()
+            
+            # Check All Strategies
+            for strat in self.strategies:
+                if strat.cfg.timeframe == tf:
+                    # Determine which is target and which is ref
+                    target_candle = self.pending_candles[tf].get(strat.cfg.target_symbol)
+                    ref_candle = self.pending_candles[tf].get(strat.cfg.ref_symbol)
+                    
+                    if target_candle and ref_candle:
+                        signal = strat.on_candles(target_candle, ref_candle, macro_dir, equity, buying_power)
+                        if signal:
+                            await self._execute(signal)
 
     async def _execute(self, signal):
         logger.info(f"⚡ EXECUTION SIGNAL ({signal['strategy']}): {signal}")

@@ -143,23 +143,22 @@ def run_verification():
     config = BacktestConfig(
         timeframe_minutes=2,
         entry_expiry_candles=15,
-        fib_entry=0.5, 
-        fib_stop=1.0, 
+        fib_entry=0.382, # V8
+        fib_stop=1.15,   # V8
         fib_target=0.0,
         min_wick_ratio=0.25,
         max_atr=6.0,
-        use_macro_filter=True, # EXPECT 2m to respect this
+        use_macro_filter=True, 
         use_trailing_fib=True
     )
     
-    log("\n--- Running Backtest ---")
+    log("\n--- Running Backtest (V8 Honest) ---")
     engine = DebugBacktest(config)
     res = engine.run(es_day, nq_day)
     
     log(f"\nTrades found: {len(res.trades)}")
     for t in res.trades:
-        if '12:5' in str(t.ppi_time) or '13:0' in str(t.ppi_time):
-             log(f"RELEVANT TRADE: Fill: {t.fill_time} | Dir: {t.sweep_direction} | State: {t.state}")
+        log(f"TRADE: PPI: {t.ppi_time} | Fill: {t.fill_time} | Side: {t.sweep_direction} | Entry: {t.entry_price:.2f} | PnL: {t.pnl:.2f}")
         
     return output
 
