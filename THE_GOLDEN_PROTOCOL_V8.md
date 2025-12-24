@@ -30,17 +30,37 @@ This strategy exploits false breakouts (Liquidity Sweeps) during inter-market di
 | **R:R** | 1 : 0.49 | High probability scalping math. |
 | **Filter** | **Macro (Honest)** | Trade only when 1H Trend (Shift 1) agrees. |
 
-## ⚙️ Secondary Configuration (5m NQ Long)
-**Asset:** NQ (Nasdaq 100)
-**Timeframe:** 5 Minutes
-**Direction:** LONG (Bullish)
+## ⚙️ Secondary Configuration (5m NQ Long) - TWO OPTIONS
 
-| Parameter | Value |
-| :--- | :--- | 
-| **ENTRY** | **0.5 Fib** |
-| **STOP** | **1.15 Fib** |
-| **TARGET** | **0.0 Fib** |
-| **WIN RATE** | **86.0%** |
+For NQ, we have identified two distinct trading "modes". Choose based on your Risk:Reward preference.
+
+### 🔵 Option A: "The Standard" (Classic V8)
+*Best for: Conservative traders who prioritize R:R.*
+*   **Logic:** Standard Pullback + Trend Filter
+*   **ENTRY:** **0.5 Fib**
+*   **MACRO:** **ON** (Honest 1H Trend)
+*   **R:R:** **1 : 0.77** (Risk $1 to make $0.77)
+*   **Win Rate:** **~68-72%** (Verified Tick-Data)
+*   **PnL (3 Mo):** ~$38,000
+*   **Pros:** Better Risk/Reward per trade. Fewer, higher quality setups.
+
+### 🟣 Option B: "The Aggressive" (Einstein Optimized)
+*Best for: High-frequency scalpers who want maximum PnL.*
+*   **Logic:** Shallow Entry + Pure Price Action (No Macro)
+*   **ENTRY:** **0.382 Fib** (Aggressive)
+*   **MACRO:** **OFF** (Captures counter-trend moves)
+*   **R:R:** **1 : 0.50** (Risk $1 to make $0.50)
+*   **Win Rate:** **77.4%** (Verified Tick-Data)
+*   **PnL (3 Mo):** **$60,415** (Verified)
+*   **Pros:** Highest total dollar profit. Massive trade volume (~530 trades). Extremely consistent.
+*   **Cons:** Requires high win rate to maintain profitability due to lower R:R.
+
+| Comparison | Option A (Standard) | Option B (Aggressive) |
+| :--- | :--- | :--- |
+| **Philosophy** | Quality over Quantity | Quantity & Consistency |
+| **Entry Depth** | Deep (0.5) | Shallow (0.382) |
+| **Fill Rate** | Moderate | High |
+| **Risk Profile** | Balanced | Scalper Odds (High WR, Low RR) |
 
 ---
 

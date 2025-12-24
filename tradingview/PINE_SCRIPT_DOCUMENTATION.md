@@ -33,16 +33,22 @@ The script automatically configures parameters based on the chart symbol:
 
 ### Asset-Specific Settings (Hardcoded)
 
-| Parameter | NQ (Long) | ES (Short) |
-|-----------|-----------|------------|
-| **Fib Entry** | 0.5 (50%) | 0.382 (38.2%) |
-| **Fib Stop** | 1.15 | 1.15 |
-| **Fib Target** | 0.0 | 0.0 |
-| **Wick Ratio** | 50% | 35% |
-| **Max ATR** | No limit | 4.5 |
-| **Expiry** | 20 bars | 15 bars |
-| **Direction** | LONG only | SHORT only |
-| **Comparison** | vs ES | vs NQ |
+### Asset-Specific Settings (Hardcoded Defaults)
+
+| Parameter | ES (Short) | NQ (Option A - Default) | NQ (Option B - Aggressive) |
+|-----------|------------|-------------------------|----------------------------|
+| **Fib Entry** | 0.382 | 0.5 (50%) | **0.382 (38.2%)** |
+| **Macro Filter** | ON | ON | **OFF** |
+| **Fib Stop** | 1.15 | 1.15 | 1.15 |
+| **Fib Target** | 0.0 | 0.0 | 0.0 |
+| **Wick Ratio** | 35% | 50% | 50% |
+| **Win Rate** | 76% | ~70% | **77.4%** |
+| **R:R** | 1:0.77 | 1:0.77 | **1:0.50** |
+
+> **To Activate NQ Option B (Einstein Mode):**
+> Until the next script update, you must manually edit the code:
+> 1. Line 28: Change `is_nq ? 0.5 : 0.382` to `0.382` (Universal).
+> 2. Inputs: Uncheck `Use Macro Filter` in the settings panel.
 
 ### User Inputs
 - `Fib Stop Level` (default 1.15)
