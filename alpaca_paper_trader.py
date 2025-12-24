@@ -16,6 +16,11 @@ from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest, TakeProfitRequest, StopLossRequest
 from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass
 from alpaca.common.exceptions import APIError
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockBarsRequest
+from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+import pandas as pd
+import numpy as np
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -79,6 +84,7 @@ class StrategyConfig:
     fib_target: float = 0.0 # Default 0.0 (Impulse End). 0.1 = Extension.
     min_wick: float = 0.0
     max_atr: float = 0.0
+    use_macro: bool = True
     
     # Validation helpers
     def is_short(self): return self.direction == OrderSide.SELL
@@ -118,6 +124,67 @@ CONFIGS = [
         max_atr=0.0 
     )
 ]
+
+# --- HONEST MACRO TRACKER (DEC 24) ---
+class MacroTracker:
+    def __init__(self, api_key, secret, symbol="SPY"):
+        self.client = StockHistoricalDataClient(api_key, secret)
+        self.symbol = symbol
+        self.current_trend = 0 # 0=Unknown, 1=Bull, -1=Bear
+        self.last_update = None
+        self.logger = logging.getLogger("MacroTracker")
+        
+    def update(self):
+        """Fetches recent 1H bars and calculates Shift(1) Trend."""
+        try:
+            now = datetime.now(timezone.utc)
+            # Only update once per hour or on startup
+            if self.last_update and (now - self.last_update).total_seconds() < 300:
+                return self.current_trend
+
+            self.logger.info("Updating Honest Macro Trend...")
+            req = StockBarsRequest(
+                symbol_or_symbols=self.symbol,
+                timeframe=TimeFrame(1, TimeFrameUnit.Hour),
+                limit=200 # Sufficient for EMA50
+            )
+            bars = self.client.get_stock_bars(req).df
+            if bars.empty:
+                self.logger.warning("Empty Macro Data")
+                return 0
+                
+            # Logic: Matches data_loader.py
+            # 1. Resample to 1H (Alpaca gives 1H bars, but ensure integrity)
+            df = bars.reset_index()
+            # 2. Calc EMA 50
+            df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+            # 3. Macro Trend = Close > EMA
+            df['raw_trend'] = np.where(df['close'] > df['ema_50'], 1, -1)
+            # 4. SHIFT(1) - The Honest Logic
+            # We use the trend of the COMPLETED bar (prev index)
+            df['honest_trend'] = df['raw_trend'].shift(1)
+            
+            # Get latest valid
+            last_valid = df.iloc[-1]
+            # Verify timestamp? 
+            # Alpaca bars are indexed by open time?
+            # If current time is 13:15. Last bar is 13:00 (Open).
+            # We want the trend derived from the 12:00 Bar (Closed at 13:00).
+            # Use 'honest_trend' of the 13:00 bar row?
+            # If we shifted raw_trend (calculated on 13:00 close), 
+            # shift(1) puts the 12:00 trend onto the 13:00 row.
+            # So looking at the LAST row gives us the 12:00 trend.
+            # Correct.
+            
+            trend = int(last_valid['honest_trend']) if not pd.isna(last_valid['honest_trend']) else 0
+            self.current_trend = trend
+            self.last_update = now
+            self.logger.info(f"✅ Honest Macro Trend Updated: {trend} (Shift 1 OK)")
+            return trend
+            
+        except Exception as e:
+            self.logger.error(f"Macro Update Failed: {e}")
+            return self.current_trend
 
 # --- AGGREGATION ---
 
@@ -172,15 +239,15 @@ class StrategyInstance:
         self.ppi_data = {}
         self.logger = logging.getLogger(f"STRAT_{config.name}")
         
-    def on_candles(self, target_c: Candle, ref_c: Candle) -> Optional[Dict]:
+    def on_candles(self, target_c: Candle, ref_c: Candle, macro_dir: int) -> Optional[Dict]:
         """Called when matched candles for this TF are ready."""
         
-        self.logger.debug(f"Tick: {target_c.close} / {ref_c.close}")
+        self.logger.debug(f"Tick: {target_c.close} / {ref_c.close} | Macro: {macro_dir}")
 
         if self.state == TradeState.SCANNING:
             return self._check_ppi(target_c, ref_c)
         elif self.state == TradeState.PPI:
-            return self._check_sweep(target_c)
+            return self._check_sweep(target_c, macro_dir)
         elif self.state == TradeState.SWEEP:
             return self._check_bos(target_c)
         # Pending/Filled handled externally or reset? 
@@ -200,7 +267,7 @@ class StrategyInstance:
             self.state = TradeState.PPI
         return None
 
-    def _check_sweep(self, target: Candle):
+    def _check_sweep(self, target: Candle, macro_dir: int):
         self.ppi_data['age'] += 1
         if self.ppi_data['age'] > 12:
             self.state = TradeState.SCANNING
@@ -216,6 +283,11 @@ class StrategyInstance:
                 wick_ratio = wick_size / rng if rng > 0 else 0
                 
                 if wick_ratio >= self.cfg.min_wick:
+                    # MACRO FILTER
+                    if self.cfg.use_macro and macro_dir != -1:
+                        self.logger.info(f"🛑 Macro Mismatch (Trend {macro_dir}, Need -1). Sweep ignored.")
+                        return None
+                        
                     self.logger.info(f"🧹 Valid Bearish Sweep! Wick: {wick_ratio:.2f}")
                     self.ppi_data['sweep_extreme'] = target.high
                     self.state = TradeState.SWEEP
@@ -230,6 +302,11 @@ class StrategyInstance:
                 wick_ratio = wick_size / rng if rng > 0 else 0
                 
                 if wick_ratio >= self.cfg.min_wick:
+                    # MACRO FILTER
+                    if self.cfg.use_macro and macro_dir != 1:
+                        self.logger.info(f"🛑 Macro Mismatch (Trend {macro_dir}, Need 1). Sweep ignored.")
+                        return None
+
                     self.logger.info(f"🧹 Valid Bullish Sweep! Wick: {wick_ratio:.2f}")
                     self.ppi_data['sweep_extreme'] = target.low
                     self.state = TradeState.SWEEP
@@ -338,6 +415,9 @@ class AlpacaPaperTrader:
         # pending_candles[tf][symbol] = Candle
         self.pending_candles = {tf: {} for tf in self.tfs}
         
+        # Macro
+        self.macro = MacroTracker(api_key, secret, SYMBOL_ES) # Use ES/SPY for macro
+        
         # Init Strategies
         self.strategies = [StrategyInstance(cfg) for cfg in CONFIGS]
         
@@ -384,7 +464,10 @@ class AlpacaPaperTrader:
                 target = nq if strat.cfg.target_symbol == SYMBOL_NQ else es
                 ref = es if strat.cfg.target_symbol == SYMBOL_NQ else nq
                 
-                signal = strat.on_candles(target, ref)
+                # Update Macro
+                macro_dir = self.macro.update()
+                
+                signal = strat.on_candles(target, ref, macro_dir)
                 if signal:
                     await self._execute(signal)
 

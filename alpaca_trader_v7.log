@@ -1,0 +1,11 @@
+2025-12-24 01:18:33,140 [INFO] Fetching Data: 2025-12-18 12:00:00+00:00 to 2025-12-18 16:00:00+00:00
+2025-12-24 01:18:33,684 [INFO] Loaded 241 SPY bars and 241 QQQ bars.
+2025-12-24 01:18:33,684 [INFO] Testing Strategy: ES_SHORT_2m_V8_HONEST (TF: 2m)
+2025-12-24 01:19:02,856 [INFO] Fetching Data: 2025-12-18 12:00:00+00:00 to 2025-12-18 16:00:00+00:00
+2025-12-24 01:19:03,294 [INFO] Loaded 241 SPY bars and 241 QQQ bars.
+2025-12-24 01:19:03,295 [INFO] SPY Index Type: <class 'pandas.core.indexes.datetimes.DatetimeIndex'>
+2025-12-24 01:19:03,295 [INFO] Sample SPY Index: 2025-12-18 12:00:00+00:00
+2025-12-24 01:19:03,296 [INFO] Testing Strategy: ES_SHORT_2m_V8_HONEST (TF: 2m)
+2025-12-24 01:19:03,309 [INFO] Running Simulation Loop...
+2025-12-24 01:19:03,309 [INFO] Updating Honest Macro Trend...
+2025-12-24 01:19:03,674 [INFO] Verification Complete. Signals Found: 0
