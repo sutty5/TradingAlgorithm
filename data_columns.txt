@@ -1,1 +1,0 @@
-['open', 'high', 'low', 'close', 'volume', 'ema_50', 'ema_200', 'atr_14', 'vol_ema_20', 'rvol', 'wick_ratio_up', 'wick_ratio_down', 'macro_trend', 'bb_mid', 'bb_std', 'bb_upper', 'bb_lower', 'bb_width', 'bb_width_ma', 'bb_expansion']

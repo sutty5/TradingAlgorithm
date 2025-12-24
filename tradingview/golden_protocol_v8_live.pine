@@ -1,0 +1,448 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © AlgoSutty
+
+//@version=6
+indicator("Golden Protocol v8 LIVE", shorttitle="GP v8", overlay=true, max_labels_count=500, max_lines_count=500)
+
+// =============================================================================
+// 🏆 THE GOLDEN PROTOCOL V8 - LIVE TRADING INDICATOR
+// =============================================================================
+
+// --- Input Groups ---
+GRP_MAIN   = "🎯 Protocol Settings"
+GRP_VISUAL = "🎨 Visual Settings"
+
+// --- Core Parameters ---
+fib_stop_input  = input.float(1.15, "Fib Stop Level", group=GRP_MAIN)
+use_macro       = input.bool(true, "Use Macro Filter (1H)", group=GRP_MAIN)
+
+// --- Visual Settings ---
+show_fibs       = input.bool(true, "Show Fibonacci Levels", group=GRP_VISUAL)
+show_all_ppi    = input.bool(true, "Show All PPI", group=GRP_VISUAL)
+show_info       = input.bool(true, "ℹ️ Show Strategy Guide", group=GRP_VISUAL)
+
+// --- Auto-Detect Configuration ---
+is_nq = str.contains(syminfo.ticker, "NQ") or str.contains(syminfo.ticker, "NAS100")
+is_es = str.contains(syminfo.ticker, "ES") or str.contains(syminfo.ticker, "US500")
+
+final_fib_entry = is_nq ? 0.5 : 0.382
+final_expiry    = is_nq ? 20 : 15
+final_wick      = is_nq ? 0.5 : 0.35
+final_max_atr   = is_nq ? 0.0 : 4.5
+final_fib_stop  = fib_stop_input
+
+allow_longs  = is_nq
+allow_shorts = is_es
+
+comp_ticker = is_nq ? "CME_MINI:ES1!" : "CME_MINI:NQ1!"
+
+// --- Colors ---
+c_bull    = color.new(#00E676, 0)
+c_bear    = color.new(#FF5252, 0)
+c_ppi     = color.new(#9C27B0, 0)
+c_sweep   = color.new(#FF9800, 0)
+c_entry   = color.new(#4CAF50, 0)
+c_stop    = color.new(#F44336, 0)
+c_target  = color.new(#2196F3, 0)
+c_pending = color.new(#FFC107, 0)
+
+// =============================================================================
+// DATA
+// =============================================================================
+
+o = open, h = high, l = low, c = close
+
+comp_c = request.security(comp_ticker, timeframe.period, close, lookahead=barmerge.lookahead_off)
+comp_o = request.security(comp_ticker, timeframe.period, open, lookahead=barmerge.lookahead_off)
+
+htf_close = request.security(syminfo.tickerid, "60", close[1], lookahead=barmerge.lookahead_off)
+htf_ema   = request.security(syminfo.tickerid, "60", ta.ema(close, 50)[1], lookahead=barmerge.lookahead_off)
+macro_dir = not na(htf_close) and not na(htf_ema) ? (htf_close > htf_ema ? 1 : -1) : 0
+
+
+current_atr = ta.sma(ta.tr, 14)
+
+// Label offset to position above/below candles
+label_offset = current_atr * 0.5
+
+// =============================================================================
+// STATE MACHINE
+// =============================================================================
+
+var int STATE_SCANNING = 0
+var int STATE_PPI      = 1
+var int STATE_SWEEP    = 2
+var int STATE_PENDING  = 3
+var int STATE_FILLED   = 4
+
+var int state = STATE_SCANNING
+var int ppi_dir = 0
+var int ppi_start_idx = 0
+var float ppi_high = na
+var float ppi_low = na
+var float sweep_extreme = na
+var float impulse_origin = na
+var float entry_price = na
+var float stop_price = na
+var float target_price = na
+var int pending_start_idx = 0
+
+// Trade Tracking
+var int total_wins = 0
+var int total_losses = 0
+var float total_pnl = 0.0
+
+// Line references for current trade
+var line line_entry = na
+var line line_stop = na
+var line line_target = na
+
+// =============================================================================
+// PHASE 1: PPI DETECTION
+// =============================================================================
+
+my_bull = c > o
+my_bear = c < o
+comp_bull = not na(comp_c) and not na(comp_o) and comp_c > comp_o
+comp_bear = not na(comp_c) and not na(comp_o) and comp_c < comp_o
+
+is_divergence = (my_bull and comp_bear) or (my_bear and comp_bull)
+
+if state == STATE_SCANNING and is_divergence and not na(comp_c)
+    state := STATE_PPI
+    ppi_start_idx := bar_index
+    ppi_high := h
+    ppi_low := l
+    
+    if show_all_ppi
+        label.new(bar_index, h + label_offset, "DIV", color=c_ppi, textcolor=color.white, style=label.style_label_down, size=size.tiny)
+
+// =============================================================================
+// PHASE 2: SWEEP DETECTION
+// =============================================================================
+
+if state == STATE_PPI
+    bars_since_ppi = bar_index - ppi_start_idx
+    
+    if bars_since_ppi > 12
+        state := STATE_SCANNING
+    else
+        candle_range = h - l
+        body_top = math.max(o, c)
+        body_bottom = math.min(o, c)
+        wick_up = h - body_top
+        wick_down = body_bottom - l
+        ratio_up = candle_range > 0 ? wick_up / candle_range : 0
+        ratio_down = candle_range > 0 ? wick_down / candle_range : 0
+        
+        // Bearish Sweep
+        if h > ppi_high and c < ppi_high and allow_shorts
+            if ratio_up >= final_wick
+                is_atr_ok = final_max_atr == 0 or current_atr <= final_max_atr
+                is_macro_ok = not use_macro or macro_dir == -1
+                
+                if is_atr_ok and is_macro_ok
+                    state := STATE_SWEEP
+                    ppi_dir := -1
+                    sweep_extreme := h
+                    label.new(bar_index, h + label_offset, "SWEEP", color=c_sweep, textcolor=color.white, style=label.style_label_down, size=size.small)
+                    alert("SWEEP Bearish @ " + str.tostring(h, "#.##"), alert.freq_once_per_bar)
+        
+        // Bullish Sweep
+        if l < ppi_low and c > ppi_low and allow_longs
+            if ratio_down >= final_wick
+                is_atr_ok = final_max_atr == 0 or current_atr <= final_max_atr
+                is_macro_ok = not use_macro or macro_dir == 1
+                
+                if is_atr_ok and is_macro_ok
+                    state := STATE_SWEEP
+                    ppi_dir := 1
+                    sweep_extreme := l
+                    label.new(bar_index, l - label_offset, "SWEEP", color=c_sweep, textcolor=color.white, style=label.style_label_up, size=size.small)
+                    alert("SWEEP Bullish @ " + str.tostring(l, "#.##"), alert.freq_once_per_bar)
+
+// =============================================================================
+// PHASE 3: BOS CONFIRMATION - CREATE FIB LINES
+// =============================================================================
+
+if state == STATE_SWEEP
+    trigger_level = ppi_dir == -1 ? ppi_low : ppi_high
+    
+    if ppi_dir == -1 and c < trigger_level
+        state := STATE_PENDING
+        pending_start_idx := bar_index
+        impulse_origin := l
+        
+        price_range = math.abs(sweep_extreme - impulse_origin)
+        entry_price := impulse_origin + (price_range * final_fib_entry)
+        stop_price := impulse_origin + (price_range * final_fib_stop)
+        target_price := impulse_origin
+        
+        // Create fib lines NOW at BOS
+        if show_fibs
+            line_entry := line.new(bar_index, entry_price, bar_index + 1, entry_price, color=c_entry, width=2)
+            line_stop := line.new(bar_index, stop_price, bar_index + 1, stop_price, color=c_stop, width=2)
+            line_target := line.new(bar_index, target_price, bar_index + 1, target_price, color=c_target, width=2, style=line.style_dashed)
+        
+        label.new(bar_index, h + label_offset * 2, "BOS SHORT\nEntry: " + str.tostring(entry_price, "#.##"), 
+                  color=c_bear, textcolor=color.white, style=label.style_label_down, size=size.normal)
+        alert("BOS SHORT - Limit @ " + str.tostring(entry_price, "#.##"), alert.freq_once_per_bar)
+        
+    else if ppi_dir == 1 and c > trigger_level
+        state := STATE_PENDING
+        pending_start_idx := bar_index
+        impulse_origin := h
+        
+        price_range = math.abs(sweep_extreme - impulse_origin)
+        entry_price := impulse_origin - (price_range * final_fib_entry)
+        stop_price := impulse_origin - (price_range * final_fib_stop)
+        target_price := impulse_origin
+        
+        // Create fib lines NOW at BOS
+        if show_fibs
+            line_entry := line.new(bar_index, entry_price, bar_index + 1, entry_price, color=c_entry, width=2)
+            line_stop := line.new(bar_index, stop_price, bar_index + 1, stop_price, color=c_stop, width=2)
+            line_target := line.new(bar_index, target_price, bar_index + 1, target_price, color=c_target, width=2, style=line.style_dashed)
+        
+        label.new(bar_index, l - label_offset * 2, "BOS LONG\nEntry: " + str.tostring(entry_price, "#.##"), 
+                  color=c_bull, textcolor=color.white, style=label.style_label_up, size=size.normal)
+        alert("BOS LONG - Limit @ " + str.tostring(entry_price, "#.##"), alert.freq_once_per_bar)
+
+// =============================================================================
+// PHASE 4: PENDING - EXTEND FIB LINES
+// =============================================================================
+
+if state == STATE_PENDING
+    bars_since_bos = bar_index - pending_start_idx
+    
+    // Trailing logic and update lines
+    if ppi_dir == -1 and l < impulse_origin
+        impulse_origin := l
+        price_range = math.abs(sweep_extreme - impulse_origin)
+        entry_price := impulse_origin + (price_range * final_fib_entry)
+        stop_price := impulse_origin + (price_range * final_fib_stop)
+        target_price := impulse_origin
+        
+    if ppi_dir == 1 and h > impulse_origin
+        impulse_origin := h
+        price_range = math.abs(sweep_extreme - impulse_origin)
+        entry_price := impulse_origin - (price_range * final_fib_entry)
+        stop_price := impulse_origin - (price_range * final_fib_stop)
+        target_price := impulse_origin
+    
+    // Extend lines to current bar
+    if show_fibs and not na(line_entry)
+        line.set_xy2(line_entry, bar_index, entry_price)
+        line.set_y1(line_entry, entry_price)
+        line.set_xy2(line_stop, bar_index, stop_price)
+        line.set_y1(line_stop, stop_price)
+        line.set_xy2(line_target, bar_index, target_price)
+        line.set_y1(line_target, target_price)
+    
+    // Check for simulated fill
+    filled = false
+    if ppi_dir == 1 and l <= entry_price
+        filled := true
+    if ppi_dir == -1 and h >= entry_price
+        filled := true
+    
+    if filled
+        state := STATE_FILLED
+        fill_y = ppi_dir == 1 ? entry_price - label_offset : entry_price + label_offset
+        label.new(bar_index, fill_y, "📍 FILLED", color=color.blue, textcolor=color.white, size=size.small, style=ppi_dir == 1 ? label.style_label_up : label.style_label_down)
+        alert("FILLED @ " + str.tostring(entry_price, "#.##"), alert.freq_once_per_bar)
+    
+    // Expiry
+    else if bars_since_bos >= final_expiry
+        state := STATE_SCANNING
+        // Delete lines on expiry
+        if not na(line_entry)
+            line.delete(line_entry)
+            line.delete(line_stop)
+            line.delete(line_target)
+        label.new(bar_index, c + label_offset, "⏰ EXPIRED", color=color.gray, textcolor=color.white, size=size.small)
+
+// =============================================================================
+// PHASE 5: FILLED - FINALIZE LINES AND TRACK OUTCOME
+// =============================================================================
+
+if state == STATE_FILLED
+    hit_stop = false
+    hit_target = false
+    
+    if ppi_dir == 1  // Long
+        hit_stop := l <= stop_price
+        hit_target := h >= target_price
+    else  // Short
+        hit_stop := h >= stop_price
+        hit_target := l <= target_price
+    
+    // Extend lines while in trade
+    if show_fibs and not na(line_entry)
+        line.set_xy2(line_entry, bar_index, entry_price)
+        line.set_xy2(line_stop, bar_index, stop_price)
+        line.set_xy2(line_target, bar_index, target_price)
+    
+    if hit_stop
+        loss_amt = math.abs(entry_price - stop_price) * (is_nq ? 20 : 50)
+        total_losses += 1
+        total_pnl -= loss_amt
+        
+        // Draw fib lines (LOSS)
+        line.new(bar_index - 15, entry_price, bar_index, entry_price, color=c_entry, width=2)
+        line.new(bar_index - 15, stop_price, bar_index, stop_price, color=c_stop, width=4)
+        line.new(bar_index - 15, target_price, bar_index, target_price, color=c_target, width=2, style=line.style_dashed)
+        
+        label.new(bar_index, ppi_dir == 1 ? l - label_offset : h + label_offset, "❌ LOSS -$" + str.tostring(loss_amt, "#"), color=c_bear, textcolor=color.white, size=size.small)
+        alert("LOSS -$" + str.tostring(loss_amt, "#"), alert.freq_once_per_bar)
+        
+        line_entry := na
+        line_stop := na
+        line_target := na
+        state := STATE_SCANNING
+        ppi_dir := 0
+        
+    else if hit_target
+        win_amt = math.abs(entry_price - target_price) * (is_nq ? 20 : 50)
+        total_wins += 1
+        total_pnl += win_amt
+        
+        // Draw fib lines (WIN)
+        line.new(bar_index - 15, entry_price, bar_index, entry_price, color=c_entry, width=2)
+        line.new(bar_index - 15, stop_price, bar_index, stop_price, color=c_stop, width=2, style=line.style_dotted)
+        line.new(bar_index - 15, target_price, bar_index, target_price, color=c_target, width=4)
+        
+        label.new(bar_index, ppi_dir == 1 ? h + label_offset : l - label_offset, "✅ WIN +$" + str.tostring(win_amt, "#"), color=c_bull, textcolor=color.white, size=size.small)
+        alert("WIN +$" + str.tostring(win_amt, "#"), alert.freq_once_per_bar)
+        
+        line_entry := na
+        line_stop := na
+        line_target := na
+        state := STATE_SCANNING
+        ppi_dir := 0
+
+// =============================================================================
+// LIVE FIB LABELS (on current bar)
+// =============================================================================
+
+if barstate.islast and (state == STATE_PENDING or state == STATE_FILLED)
+    label.new(bar_index + 3, entry_price, "ENTRY " + str.tostring(entry_price, "#.##"), color=color.new(c_entry, 80), textcolor=c_entry, style=label.style_label_left, size=size.small)
+    label.new(bar_index + 3, stop_price, "STOP " + str.tostring(stop_price, "#.##"), color=color.new(c_stop, 80), textcolor=c_stop, style=label.style_label_left, size=size.small)
+    label.new(bar_index + 3, target_price, "TARGET " + str.tostring(target_price, "#.##"), color=color.new(c_target, 80), textcolor=c_target, style=label.style_label_left, size=size.small)
+
+// =============================================================================
+// INFO PANEL
+// =============================================================================
+
+total_trades = total_wins + total_losses
+win_rate = total_trades > 0 ? (total_wins / total_trades * 100) : 0
+
+var table info = table.new(position.top_right, 2, 10, bgcolor=color.new(color.black, 70), frame_color=color.gray, frame_width=1)
+
+if barstate.islast
+    table.cell(info, 0, 0, "GP v8", text_color=color.white, bgcolor=color.new(color.blue, 50))
+    table.cell(info, 1, 0, is_nq ? "NQ LONG" : "ES SHORT", text_color=is_nq ? c_bull : c_bear, bgcolor=color.new(color.blue, 50))
+    
+    wr_color = win_rate >= 70 ? c_bull : (win_rate >= 50 ? c_pending : c_bear)
+    table.cell(info, 0, 1, "Win Rate:", text_color=color.gray)
+    table.cell(info, 1, 1, str.tostring(win_rate, "#.#") + "% (" + str.tostring(total_wins) + "/" + str.tostring(total_trades) + ")", text_color=wr_color)
+    
+    // Comparison ticker row
+    comp_status = na(comp_c) ? "❌ NO DATA" : "✓ OK"
+    comp_display = is_nq ? "vs ES" : "vs NQ"
+    table.cell(info, 0, 2, "Compare:", text_color=color.gray)
+    table.cell(info, 1, 2, comp_display + " " + comp_status, text_color=na(comp_c) ? c_bear : c_bull)
+    
+    state_txt = switch state
+        STATE_SCANNING => "SCANNING"
+        STATE_PPI => "PPI"
+        STATE_SWEEP => "SWEEP"
+        STATE_PENDING => "PENDING"
+        STATE_FILLED => "IN TRADE"
+        => "?"
+    table.cell(info, 0, 3, "State:", text_color=color.gray)
+    table.cell(info, 1, 3, state_txt, text_color=state == STATE_PENDING ? c_pending : color.white)
+    
+    macro_txt = macro_dir == 1 ? "BULL" : (macro_dir == -1 ? "BEAR" : "FLAT")
+    table.cell(info, 0, 4, "Macro:", text_color=color.gray)
+    table.cell(info, 1, 4, macro_txt, text_color=macro_dir == 1 ? c_bull : (macro_dir == -1 ? c_bear : color.gray))
+    
+    if state == STATE_PENDING or state == STATE_FILLED
+        table.cell(info, 0, 5, "Entry:", text_color=color.gray)
+        table.cell(info, 1, 5, str.tostring(entry_price, "#.##"), text_color=c_entry)
+        table.cell(info, 0, 6, "Stop:", text_color=color.gray)
+        table.cell(info, 1, 6, str.tostring(stop_price, "#.##"), text_color=c_stop)
+        table.cell(info, 0, 7, "Target:", text_color=color.gray)
+        table.cell(info, 1, 7, str.tostring(target_price, "#.##"), text_color=c_target)
+        
+        // R:R calculation
+        risk = math.abs(entry_price - stop_price)
+        reward = math.abs(target_price - entry_price)
+        rr_ratio = risk > 0 ? reward / risk : 0
+        table.cell(info, 0, 8, "R:R:", text_color=color.gray)
+        table.cell(info, 1, 8, str.tostring(rr_ratio, "#.##") + ":1", text_color=rr_ratio >= 1 ? c_bull : c_pending)
+        
+        table.cell(info, 0, 9, "PnL:", text_color=color.gray)
+        table.cell(info, 1, 9, "$" + str.tostring(total_pnl, "#"), text_color=total_pnl >= 0 ? c_bull : c_bear)
+    else
+        table.cell(info, 0, 5, "", text_color=color.gray)
+        table.cell(info, 1, 5, "", text_color=color.gray)
+        table.cell(info, 0, 6, "", text_color=color.gray)
+        table.cell(info, 1, 6, "", text_color=color.gray)
+        table.cell(info, 0, 7, "", text_color=color.gray)
+        table.cell(info, 1, 7, "", text_color=color.gray)
+        table.cell(info, 0, 8, "", text_color=color.gray)
+        table.cell(info, 1, 8, "", text_color=color.gray)
+        
+        table.cell(info, 0, 9, "PnL:", text_color=color.gray)
+        table.cell(info, 1, 9, "$" + str.tostring(total_pnl, "#"), text_color=total_pnl >= 0 ? c_bull : c_bear)
+
+// =============================================================================
+// STRATEGY GUIDE PANEL
+// =============================================================================
+
+var table guide = table.new(position.bottom_right, 1, 24, bgcolor=color.new(color.black, 60), frame_color=color.gray, frame_width=1)
+
+if barstate.islast and show_info
+    // Dynamic text based on current index
+    idx_name = is_nq ? "NQ" : "ES"
+    comp_name = is_nq ? "ES" : "NQ"
+    direction = is_nq ? "LONG" : "SHORT"
+    dir_color = is_nq ? c_bull : c_bear
+    wick_pct = is_nq ? "50%" : "35%"
+    macro_dir = is_nq ? "1H close > EMA (bullish)" : "1H close < EMA (bearish)"
+    atr_txt = is_nq ? "No ATR limit" : "Max ATR: 4.5"
+    fib_entry = is_nq ? "50%" : "38.2%"
+    expiry_txt = is_nq ? "20 bars" : "15 bars"
+    
+    table.cell(guide, 0, 0, "📘 " + idx_name + " ALGORITHM GUIDE", text_color=color.white, bgcolor=color.new(color.blue, 50))
+    
+    table.cell(guide, 0, 1, "━━━ PHASE 1: PPI DETECTION ━━━", text_color=c_ppi)
+    table.cell(guide, 0, 2, "• Compares " + idx_name + " bar vs " + comp_name, text_color=color.white)
+    table.cell(guide, 0, 3, "• DIV = " + idx_name + " bullish, " + comp_name + " bearish", text_color=color.white)
+    table.cell(guide, 0, 4, "• Or vice versa (opposite directions)", text_color=color.white)
+    
+    table.cell(guide, 0, 5, "━━━ PHASE 2: SWEEP ━━━", text_color=c_sweep)
+    table.cell(guide, 0, 6, "• Must sweep PPI high/low", text_color=color.white)
+    table.cell(guide, 0, 7, "• Wick ratio required: " + wick_pct, text_color=color.white)
+    table.cell(guide, 0, 8, "• Macro: " + macro_dir, text_color=color.white)
+    table.cell(guide, 0, 9, "• " + atr_txt, text_color=color.white)
+    
+    table.cell(guide, 0, 10, "━━━ PHASE 3: BOS ENTRY ━━━", text_color=dir_color)
+    table.cell(guide, 0, 11, "• Candle closes beyond PPI = BOS", text_color=color.white)
+    table.cell(guide, 0, 12, "• Entry: " + fib_entry + " fib retracement", text_color=color.white)
+    table.cell(guide, 0, 13, "• Stop: 115% extension", text_color=color.white)
+    table.cell(guide, 0, 14, "• Target: Impulse origin (0%)", text_color=color.white)
+    
+    table.cell(guide, 0, 15, "━━━ PHASE 4: TRAILING ━━━", text_color=c_entry)
+    table.cell(guide, 0, 16, "• Fibs recalc as impulse extends", text_color=color.white)
+    table.cell(guide, 0, 17, "• Entry/Stop/Target all adjust", text_color=color.white)
+    table.cell(guide, 0, 18, "• Expires after " + expiry_txt + " if not filled", text_color=color.white)
+    
+    table.cell(guide, 0, 19, "━━━ THIS CHART ━━━", text_color=color.white)
+    table.cell(guide, 0, 20, idx_name + ": " + direction + " ONLY", text_color=dir_color)
+    table.cell(guide, 0, 21, "Comparing to " + comp_name + " for divergence", text_color=color.white)
+    
+    table.cell(guide, 0, 22, "━━━━━━━━━━━━━━━━━━━━━━━", text_color=color.gray)
+    table.cell(guide, 0, 23, "⚙️ Settings → uncheck to hide", text_color=color.new(color.white, 50))
+
