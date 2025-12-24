@@ -102,13 +102,7 @@ if barstate.islast and use_macro
 // =============================================================================
 
 // --- Cancel/Reset Conditions ---
-reset_protocol() =>
-    state := STATE_SCANNING
-    ppi_dir := 0
-    sweep_level := na
-    bos_level := na
-    impulse_origin := na
-    impulse_end := na
+// Cancel/Reset Logic Inlined due to Pine Scope Scope Constraints
 
 // TIMING FILTER
 in_session = true // Simplified for now, can add strict hour checks if needed
@@ -306,7 +300,12 @@ if state == STATE_PENDING
             
     // Expiry Check
     if not filled and (bar_index - pending_start_idx) > expiry_candles
-        reset_protocol()
+        state := STATE_SCANNING
+        ppi_dir := 0
+        sweep_level := na
+        bos_level := na
+        impulse_origin := na
+        impulse_end := na
         label.new(bar_index, close, "EXP", color=color.gray, size=size.tiny)
         
     // Visuals (Phantom Lines)
