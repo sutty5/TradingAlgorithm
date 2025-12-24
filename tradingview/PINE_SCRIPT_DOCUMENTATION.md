@@ -45,17 +45,23 @@ The script automatically configures parameters based on the chart symbol:
 | **Win Rate** | 76% | ~70% | **77.4%** |
 | **R:R** | 1:0.77 | 1:0.77 | **1:0.50** |
 
-> **To Activate NQ Option B (Einstein Mode):**
-> Until the next script update, you must manually edit the code:
-> 1. Line 28: Change `is_nq ? 0.5 : 0.382` to `0.382` (Universal).
-> 2. Inputs: Uncheck `Use Macro Filter` in the settings panel.
+
 
 ### User Inputs
 - `Fib Stop Level` (default 1.15)
 - `Use Macro Filter (1H)` (default true)
+- `NQ Strategy Mode` (New):
+    - **Standard (V8):** The classic trend-following logic (Entry 0.5, Macro ON).
+    - **Einstein (Aggressive):** The optimized scalping logic (Entry 0.382, Macro OFF).
 - `Show Fibonacci Levels` (default true)
 - `Show All PPI` (default true)
 - `Show Strategy Guide` (default true)
+
+> **To Activate Einstein Mode:**
+> Simply select **"Einstein (Aggressive)"** from the settings dropdown. This will automatically:
+> 1. Set Entry to 0.382
+> 2. Disable the Macro Filter (ignoring the checkbox)
+
 
 ---
 

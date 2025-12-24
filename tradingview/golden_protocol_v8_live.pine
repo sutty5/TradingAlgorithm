@@ -15,6 +15,7 @@ GRP_VISUAL = "🎨 Visual Settings"
 // --- Core Parameters ---
 fib_stop_input  = input.float(1.15, "Fib Stop Level", group=GRP_MAIN)
 use_macro       = input.bool(true, "Use Macro Filter (1H)", group=GRP_MAIN)
+nq_mode         = input.string("Standard (V8)", "Strategy Mode (NQ ONLY)", options=["Standard (V8)", "Einstein (Aggressive)"], group=GRP_MAIN, tooltip="Standard: Entry 0.5, Macro ON\nEinstein: Entry 0.382, Macro OFF")
 
 // --- Visual Settings ---
 show_fibs       = input.bool(true, "Show Fibonacci Levels", group=GRP_VISUAL)
@@ -25,7 +26,7 @@ show_info       = input.bool(true, "ℹ️ Show Strategy Guide", group=GRP_VISUA
 is_nq = str.contains(syminfo.ticker, "NQ") or str.contains(syminfo.ticker, "NAS100")
 is_es = str.contains(syminfo.ticker, "ES") or str.contains(syminfo.ticker, "US500")
 
-final_fib_entry = is_nq ? 0.5 : 0.382
+final_fib_entry = is_nq ? (nq_mode == "Einstein (Aggressive)" ? 0.382 : 0.5) : 0.382
 final_expiry    = is_nq ? 20 : 15
 final_wick      = is_nq ? 0.5 : 0.35
 final_max_atr   = is_nq ? 0.0 : 4.5
@@ -152,7 +153,10 @@ if state == STATE_PPI
         if l < ppi_low and c > ppi_low and allow_longs
             if ratio_down >= final_wick
                 is_atr_ok = final_max_atr == 0 or current_atr <= final_max_atr
-                is_macro_ok = not use_macro or macro_dir == 1
+                // For NQ Einstein Mode, we IGNORE the macro filter (Logic: Pure Price Action)
+                // For Standard Mode, we respect the user's checkbox
+                is_einstein = is_nq and nq_mode == "Einstein (Aggressive)"
+                is_macro_ok = is_einstein ? true : (not use_macro or macro_dir == 1)
                 
                 if is_atr_ok and is_macro_ok
                     state := STATE_SWEEP
@@ -341,7 +345,8 @@ var table info = table.new(position.top_right, 2, 10, bgcolor=color.new(color.bl
 
 if barstate.islast
     table.cell(info, 0, 0, "GP v8", text_color=color.white, bgcolor=color.new(color.blue, 50))
-    table.cell(info, 1, 0, is_nq ? "NQ LONG" : "ES SHORT", text_color=is_nq ? c_bull : c_bear, bgcolor=color.new(color.blue, 50))
+    mode_txt = is_nq ? (nq_mode == "Einstein (Aggressive)" ? "NQ EINSTEIN" : "NQ STANDARD") : "ES SHORT"
+    table.cell(info, 1, 0, mode_txt, text_color=is_nq ? c_bull : c_bear, bgcolor=color.new(color.blue, 50))
     
     wr_color = win_rate >= 70 ? c_bull : (win_rate >= 50 ? c_pending : c_bear)
     table.cell(info, 0, 1, "Win Rate:", text_color=color.gray)
