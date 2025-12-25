@@ -272,6 +272,8 @@ target_price := impulse_origin                                    // 0% (the ori
 | ✅ No Break Even | Not implemented (by design) |
 | ✅ 12 Bar PPI Lookback | Implemented |
 | ✅ Expiry 7 bars | Implemented (validated) |
+| ✅ ES Entry 0.5 | Optimized Dec 25, 2025 |
+| ✅ ES Wick 0.25 | Optimized Dec 25, 2025 |
 | ⚠️ Wick Filter | Tightened for TV data |
 
 ---

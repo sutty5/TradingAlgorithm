@@ -26,9 +26,9 @@ show_info       = input.bool(true, "ℹ️ Show Strategy Guide", group=GRP_VISUA
 is_nq = str.contains(syminfo.ticker, "NQ") or str.contains(syminfo.ticker, "NAS100")
 is_es = str.contains(syminfo.ticker, "ES") or str.contains(syminfo.ticker, "US500")
 
-final_fib_entry = is_nq ? (nq_mode == "Einstein (Aggressive)" ? 0.382 : 0.5) : 0.382
+final_fib_entry = is_nq ? (nq_mode == "Einstein (Aggressive)" ? 0.382 : 0.5) : 0.5  // ES: 0.5 (Dec 25, 2025 optimization)
 final_expiry    = 7  // Original Protocol: 7 candles (validated Dec 25, 2025 A/B test)
-final_wick      = is_nq ? 0.5 : 0.35
+final_wick      = is_nq ? 0.5 : 0.25  // ES: 0.25 (Dec 25, 2025 optimization)
 final_max_atr   = is_nq ? 0.0 : 4.5
 final_fib_stop  = fib_stop_input
 

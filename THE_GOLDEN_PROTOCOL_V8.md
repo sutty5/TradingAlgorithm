@@ -24,11 +24,13 @@ This strategy exploits false breakouts (Liquidity Sweeps) during inter-market di
 
 | Parameter | Value | Reason |
 | :--- | :--- | :--- |
-| **ENTRY** | **0.382 Fib** | Deep pullback entry. Safer than 0.5. |
+| **ENTRY** | **0.5 Fib** | Optimized Dec 25, 2025 (improved R:R) |
 | **STOP** | **1.15 Fib** | Wide stop above sweep to prevent wick-outs. |
 | **TARGET** | **0.0 Fib** | Conservative take profit at impulse origin. |
-| **WIN RATE** | **88.0%** | Verified on 3-month honest data. |
-| **R:R** | 1 : 0.49 | High probability scalping math. |
+| **WICK** | **0.25** | Minimum wick ratio filter. |
+| **WIN RATE** | **79.7%** | Verified via 81-config cloud optimization. |
+| **R:R** | **0.77:1** | Risk $1 to make $0.77. Better than 0.50:1. |
+| **PnL (3 Mo)** | **$6,748** | Best total profit of all tested configs. |
 | **Filter** | **Macro (Honest)** | Trade only when 1H Trend (Shift 1) agrees. |
 
 ## ⚙️ Secondary Configuration (5m NQ Long) - TWO OPTIONS

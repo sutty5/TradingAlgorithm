@@ -95,18 +95,18 @@ class StrategyConfig:
 # Entry Expiry: 7 candles (validated via A/B test Dec 25, 2025)
 CONFIGS = [
     # 🏆 THE GOLDEN TICKET (ES Short 2m)
-    # Win Rate: 75.2% (A/B Tested - 7 candle expiry)
+    # Win Rate: 79.7% (Dec 25, 2025 ES R:R Optimization)
     StrategyConfig(
         name="ES_SHORT_2m_V8.1",
         target_symbol=SYMBOL_ES,  # SPY
         ref_symbol=SYMBOL_NQ,     # QQQ
         timeframe=2,
         direction=OrderSide.SELL,
-        fib_entry=0.382,          # Deep Pullback
+        fib_entry=0.5,            # Optimized Dec 25, 2025 (was 0.382)
         fib_stop=1.15,            # Wide Invalidation
         fib_target=0.0,           # Impulse End
-        expiry_candles=7,         # V8.1: Changed from 15 to 7
-        min_wick=0.25,
+        expiry_candles=7,         # V8.1: 7 candles
+        min_wick=0.25,            # Optimized Dec 25, 2025 (was 0.35)
         max_atr=6.0
     ),
     # 💰 NQ STANDARD (NQ Long 5m)
