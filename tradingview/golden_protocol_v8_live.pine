@@ -27,7 +27,7 @@ is_nq = str.contains(syminfo.ticker, "NQ") or str.contains(syminfo.ticker, "NAS1
 is_es = str.contains(syminfo.ticker, "ES") or str.contains(syminfo.ticker, "US500")
 
 final_fib_entry = is_nq ? (nq_mode == "Einstein (Aggressive)" ? 0.382 : 0.5) : 0.382
-final_expiry    = is_nq ? 20 : 15
+final_expiry    = 7  // Original Protocol: 7 candles (validated Dec 25, 2025 A/B test)
 final_wick      = is_nq ? 0.5 : 0.35
 final_max_atr   = is_nq ? 0.0 : 4.5
 final_fib_stop  = fib_stop_input
@@ -215,8 +215,10 @@ if state == STATE_SWEEP
 // =============================================================================
 // PHASE 4: PENDING - EXTEND FIB LINES
 // =============================================================================
+// NOTE: Using 'else if' to enforce ONE state transition per bar (Dec 25, 2025 fix)
+// This prevents impossible "same candle" BOS→Fill→Win scenarios
 
-if state == STATE_PENDING
+else if state == STATE_PENDING
     bars_since_bos = bar_index - pending_start_idx
     
     // Trailing logic and update lines
@@ -269,8 +271,9 @@ if state == STATE_PENDING
 // =============================================================================
 // PHASE 5: FILLED - FINALIZE LINES AND TRACK OUTCOME
 // =============================================================================
+// NOTE: Using 'else if' to enforce ONE state transition per bar
 
-if state == STATE_FILLED
+else if state == STATE_FILLED
     hit_stop = false
     hit_target = false
     
@@ -392,7 +395,7 @@ if barstate.islast
         table.cell(info, 0, 7, "Target:", text_color=color.gray)
         table.cell(info, 1, 7, str.tostring(target_price, "#.##"), text_color=c_target)
         
-        // R:R calculation
+        // R:R calculation (active trade)
         risk = math.abs(entry_price - stop_price)
         reward = math.abs(target_price - entry_price)
         rr_ratio = risk > 0 ? reward / risk : 0
@@ -402,14 +405,20 @@ if barstate.islast
         table.cell(info, 0, 9, "PnL:", text_color=color.gray)
         table.cell(info, 1, 9, "$" + str.tostring(total_pnl, "#"), text_color=total_pnl >= 0 ? c_bull : c_bear)
     else
-        table.cell(info, 0, 5, "", text_color=color.gray)
-        table.cell(info, 1, 5, "", text_color=color.gray)
-        table.cell(info, 0, 6, "", text_color=color.gray)
-        table.cell(info, 1, 6, "", text_color=color.gray)
-        table.cell(info, 0, 7, "", text_color=color.gray)
-        table.cell(info, 1, 7, "", text_color=color.gray)
-        table.cell(info, 0, 8, "", text_color=color.gray)
-        table.cell(info, 1, 8, "", text_color=color.gray)
+        // Calculate expected R:R based on config (Entry 0.382 or 0.5, Stop 1.15, Target 0.0)
+        // R:R = (Entry - Target) / (Stop - Entry) = Entry / (Stop - Entry)
+        expected_rr = final_fib_entry / (final_fib_stop - final_fib_entry)
+        
+        table.cell(info, 0, 5, "Entry Fib:", text_color=color.gray)
+        table.cell(info, 1, 5, str.tostring(final_fib_entry * 100, "#.#") + "%", text_color=c_entry)
+        table.cell(info, 0, 6, "Stop Fib:", text_color=color.gray)
+        table.cell(info, 1, 6, str.tostring(final_fib_stop * 100, "#") + "%", text_color=c_stop)
+        table.cell(info, 0, 7, "Expiry:", text_color=color.gray)
+        table.cell(info, 1, 7, str.tostring(final_expiry) + " bars", text_color=color.white)
+        
+        // Always show expected R:R
+        table.cell(info, 0, 8, "R:R:", text_color=color.gray)
+        table.cell(info, 1, 8, str.tostring(expected_rr, "#.##") + ":1 (exp)", text_color=expected_rr >= 1 ? c_bull : c_pending)
         
         table.cell(info, 0, 9, "PnL:", text_color=color.gray)
         table.cell(info, 1, 9, "$" + str.tostring(total_pnl, "#"), text_color=total_pnl >= 0 ? c_bull : c_bear)

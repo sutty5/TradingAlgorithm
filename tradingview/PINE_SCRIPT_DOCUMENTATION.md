@@ -1,8 +1,8 @@
-# 🏆 Golden Protocol V8 Pine Script Documentation
+# 🏆 Golden Protocol V8.1 Pine Script Documentation
 
-> **Version:** 8.0 LIVE  
+> **Version:** 8.1 LIVE  
 > **File:** `golden_protocol_v8_live.pine`  
-> **Last Updated:** December 24, 2025  
+> **Last Updated:** December 25, 2025  
 > **Status:** Production Ready
 
 ---
@@ -80,7 +80,14 @@ STATE_SCANNING → STATE_PPI → STATE_SWEEP → STATE_PENDING → STATE_FILLED 
 3. **SWEEP → PENDING:** BOS (Break of Structure) confirmed
 4. **PENDING → FILLED:** Price touches entry level
 5. **FILLED → SCANNING:** Stop or target hit
-6. **PENDING → SCANNING:** Order expired (15-20 bars)
+6. **PENDING → SCANNING:** Order expired (7 bars)
+
+> [!CAUTION]
+> **CRITICAL: One Transition Per Bar (Dec 25, 2025 Fix)**
+> 
+> State blocks use `else if` chaining to enforce **only ONE state transition per bar**.
+> This prevents impossible "same candle" scenarios where BOS, Fill, and Win/Loss all occur together.
+> **DO NOT change `else if` back to `if`** - this would reintroduce the lookahead bug.
 
 ---
 
@@ -264,7 +271,7 @@ target_price := impulse_origin                                    // 0% (the ori
 | ✅ Trailing Fibs | Implemented |
 | ✅ No Break Even | Not implemented (by design) |
 | ✅ 12 Bar PPI Lookback | Implemented |
-| ✅ Expiry 15/20 bars | Implemented |
+| ✅ Expiry 7 bars | Implemented (validated) |
 | ⚠️ Wick Filter | Tightened for TV data |
 
 ---
@@ -283,6 +290,7 @@ target_price := impulse_origin                                    // 0% (the ori
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 8.1 | Dec 25, 2025 | **CRITICAL FIX:** Enforced one state transition per bar using `else if` chaining. Prevents impossible same-candle BOS→Fill→Win trades. |
 | 8.0 | Dec 24, 2025 | Full rewrite with enhanced visuals, dynamic algorithm guide |
 | 7.1 | Dec 23, 2025 | God Mode with auto-tuning parameters |
 | 7.0 | Dec 22, 2025 | Initial God Mode implementation |

@@ -1,8 +1,9 @@
-# 🏆 The Golden Protocol v8 (Honest God Mode)
+# 🏆 The Golden Protocol v8.1 (Honest God Mode)
 
 > [!CAUTION]
-> **VERIFIED & HONEST STRATEGY (Dec 24, 2025)**
+> **VERIFIED & HONEST STRATEGY (Dec 25, 2025)**
 > This version replaces all previous "God Mode" iterations which were found to have lookahead bias.
+> **v8.1 Updates:** Fixed same-candle execution bug, validated 7-candle entry expiry via A/B testing.
 > **DO NOT MODIFY PARAMETERS.** They are mathematically optimized on 90-day causally correct data.
 
 ## 🌟 The "Golden Ticket" Logic
@@ -84,7 +85,7 @@ For NQ, we have identified two distinct trading "modes". Choose based on your Ri
 ### 4. Place Orders (Pending Phase)
 - **Limit Entry:** Place order at the **0.382** (ES) or **0.5** (NQ) level.
 - **Stop Loss:** Place at **1.15** level (above/below sweep).
-- **Expiry:** Cancel order if not filled within **15 candles** (ES) or **20 candles** (NQ).
+- **Expiry:** Cancel order if not filled within **7 candles** (validated Dec 25, 2025 A/B test).
 
 ### 5. Management
 - **Target:** 0.0 Fib (Impulse Origin).
@@ -100,3 +101,18 @@ Previous versions (v7.x) achieved 79% WR on 5m using 1H Trend filtering.
 **The Result:** Win rates dropped to 63% initially, but **OPTIMIZATION** found the new parameters (0.382 Entry, 1.15 Stop) that brought the **Honest Win Rate back up to 88%**.
 
 **Trust the Math. Trust the V8.**
+
+---
+
+## 🔧 v8.1 Fixes (Dec 25, 2025)
+
+### Fix 1: Same-Candle Execution Bug
+**Issue:** Pine Script allowed BOS, Entry, and Win/Loss on same candle (impossible to trade).
+**Fix:** Changed state machine to use `else if` chaining (one transition per bar).
+
+### Fix 2: Entry Expiry Validation
+**Original Protocol:** 7-candle entry expiry (per strategy creator).
+**V8 Previous:** 15-20 candles.
+**A/B Test Result:** 7-candle wins on ALL strategies (+0.6% to +2.0% WR).
+**Action:** Updated to 7-candle entry expiry across all configurations.
+

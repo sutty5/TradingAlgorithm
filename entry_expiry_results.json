@@ -1,0 +1,62 @@
+[
+  {
+    "name": "ES_SHORT_2m",
+    "expiry": 7,
+    "variant": "A",
+    "wins": 118,
+    "losses": 39,
+    "filled": 157,
+    "win_rate": 75.15923566878982,
+    "pnl": 9647.220000000207
+  },
+  {
+    "name": "ES_SHORT_2m",
+    "expiry": 15,
+    "variant": "B",
+    "wins": 120,
+    "losses": 41,
+    "filled": 161,
+    "win_rate": 74.53416149068323,
+    "pnl": 9574.01000000028
+  },
+  {
+    "name": "NQ_LONG_Std",
+    "expiry": 7,
+    "variant": "A",
+    "wins": 73,
+    "losses": 31,
+    "filled": 104,
+    "win_rate": 70.1923076923077,
+    "pnl": 14265.000000000127
+  },
+  {
+    "name": "NQ_LONG_Std",
+    "expiry": 20,
+    "variant": "B",
+    "wins": 74,
+    "losses": 34,
+    "filled": 108,
+    "win_rate": 68.51851851851852,
+    "pnl": 15413.750000000087
+  },
+  {
+    "name": "NQ_LONG_Ein",
+    "expiry": 7,
+    "variant": "A",
+    "wins": 136,
+    "losses": 37,
+    "filled": 173,
+    "win_rate": 78.61271676300578,
+    "pnl": 14295.959999999968
+  },
+  {
+    "name": "NQ_LONG_Ein",
+    "expiry": 20,
+    "variant": "B",
+    "wins": 144,
+    "losses": 44,
+    "filled": 188,
+    "win_rate": 76.59574468085107,
+    "pnl": 13911.079999999965
+  }
+]

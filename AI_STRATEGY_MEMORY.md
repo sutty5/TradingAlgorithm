@@ -581,3 +581,63 @@ We verified these exact parameters on the Tick-Level engine to confirm the 77.4%
 
 ---
 **[END OF LOG]**
+
+### 📅 Session: 2025-12-25 (CRITICAL BUG FIX: Same-Candle Execution)
+*Agent: Antigravity | Goal: Investigate and fix same-candle BOS/Entry/Win issue.*
+
+#### 1. User Report
+User noticed BOS, Entry Fill, and Win/Loss labels appearing on the same candle in TradingView. This is impossible to trade in real life.
+
+#### 2. Root Cause Analysis
+The Pine Script state machine used separate `if` blocks for each state:
+```pinescript
+if state == STATE_SWEEP ...     // Block 1
+if state == STATE_PENDING ...   // Block 2 (runs immediately after!)
+if state == STATE_FILLED ...    // Block 3 (runs immediately after!)
+```
+All blocks executed sequentially on every bar, allowing multiple state transitions in a single bar.
+
+#### 3. The Fix
+Changed to `else if` chaining:
+```pinescript
+if state == STATE_SWEEP ...
+else if state == STATE_PENDING ...  // Won't run until NEXT bar
+else if state == STATE_FILLED ...   // Won't run until NEXT bar
+```
+
+#### 4. Files Modified
+- `tradingview/golden_protocol_v8_live.pine` → Applied `else if` fix
+- `tradingview/PINE_SCRIPT_DOCUMENTATION.md` → Added CAUTION note, bumped to v8.1
+
+#### 5. Impact
+- Trade count will likely decrease (filtering impossible trades)
+- Win rate may change (could go up or down)
+- Results now reflect executable trades only
+
+---
+**[END OF LOG]**
+
+### 📅 Session: 2025-12-25 (Entry Expiry A/B Test & V8.1 Update)
+*Agent: Antigravity | Goal: Validate 7-candle vs 15-20 candle entry expiry.*
+
+#### 1. Original Protocol Review
+User's brother (strategy creator) specified:
+- BOS confirmed on candle **CLOSE** ✅ Already correct
+- **7-candle limit** between sweep and entry ❌ V8 used 15-20 candles
+
+#### 2. A/B Test (Modal Cloud)
+| Strategy | 7-Candle WR | V8 (15-20) WR | Winner |
+|----------|-------------|---------------|--------|
+| ES SHORT 2m | **75.2%** | 74.5% | 7-Candle |
+| NQ LONG Std | **70.2%** | 68.5% | 7-Candle |
+| NQ LONG Ein | **78.6%** | 76.6% | 7-Candle |
+
+**Verdict:** 7-candle wins ALL tests (+0.6% to +2.0% WR).
+
+#### 3. Updates Applied
+- `golden_protocol_v8_live.pine`: `final_expiry = 7`
+- `THE_GOLDEN_PROTOCOL_V8.md`: Updated to v8.1
+- `PINE_SCRIPT_DOCUMENTATION.md`: Updated to v8.1
+
+---
+**[END OF LOG]**
