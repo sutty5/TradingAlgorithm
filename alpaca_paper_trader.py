@@ -26,7 +26,7 @@ import numpy as np
 from dotenv import load_dotenv
 load_dotenv()
 
-# --- CONFIGURATION (v7.0 GOD MODE) ---
+# --- CONFIGURATION (v8.1 HONEST GOD MODE - DEC 25) ---
 # NQ Proxy = QQQ, ES Proxy = SPY
 SYMBOL_NQ = "QQQ"
 SYMBOL_ES = "SPY"
@@ -39,7 +39,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("alpaca_trader_v7.log"),
+        logging.FileHandler("alpaca_trader_v8.log"),
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -91,12 +91,13 @@ class StrategyConfig:
     def is_long(self): return self.direction == OrderSide.BUY
 
 # --- STRATEGY CONFIGURATIONS (GOD MODE) ---
-# --- STRATEGY CONFIGURATIONS (V8 HONEST GOD MODE - DEC 24) ---
+# --- STRATEGY CONFIGURATIONS (V8.1 HONEST GOD MODE - DEC 25) ---
+# Entry Expiry: 7 candles (validated via A/B test Dec 25, 2025)
 CONFIGS = [
-    # 🏆 THE GOLDEN TICKET (ES Short)
-    # Win Rate: 88.0% (Verified Honest)
+    # 🏆 THE GOLDEN TICKET (ES Short 2m)
+    # Win Rate: 75.2% (A/B Tested - 7 candle expiry)
     StrategyConfig(
-        name="ES_SHORT_2m_V8_HONEST",
+        name="ES_SHORT_2m_V8.1",
         target_symbol=SYMBOL_ES,  # SPY
         ref_symbol=SYMBOL_NQ,     # QQQ
         timeframe=2,
@@ -104,14 +105,14 @@ CONFIGS = [
         fib_entry=0.382,          # Deep Pullback
         fib_stop=1.15,            # Wide Invalidation
         fib_target=0.0,           # Impulse End
-        expiry_candles=15,
+        expiry_candles=7,         # V8.1: Changed from 15 to 7
         min_wick=0.25,
         max_atr=6.0
     ),
-    # 💰 THE MONEY MAKER (NQ Long) 
-    # Win Rate: 86.0% (Verified Honest)
+    # 💰 NQ STANDARD (NQ Long 5m)
+    # Win Rate: 70.2% (A/B Tested - 7 candle expiry)
     StrategyConfig(
-        name="NQ_LONG_5m_V8_HONEST",
+        name="NQ_LONG_5m_Standard_V8.1",
         target_symbol=SYMBOL_NQ,
         ref_symbol=SYMBOL_ES,
         timeframe=5,
@@ -119,9 +120,26 @@ CONFIGS = [
         fib_entry=0.5,
         fib_stop=1.15,
         fib_target=0.0,
-        expiry_candles=20,
+        expiry_candles=7,         # V8.1: Changed from 20 to 7
         min_wick=0.5,
-        max_atr=0.0 
+        max_atr=0.0,
+        use_macro=True
+    ),
+    # 🚀 NQ EINSTEIN (NQ Long 5m - Aggressive)
+    # Win Rate: 78.6% (A/B Tested - 7 candle expiry)
+    StrategyConfig(
+        name="NQ_LONG_5m_Einstein_V8.1",
+        target_symbol=SYMBOL_NQ,
+        ref_symbol=SYMBOL_ES,
+        timeframe=5,
+        direction=OrderSide.BUY,
+        fib_entry=0.382,          # Einstein: Shallower entry
+        fib_stop=1.15,
+        fib_target=0.0,
+        expiry_candles=7,
+        min_wick=0.0,             # Einstein: No wick filter
+        max_atr=0.0,
+        use_macro=False           # Einstein: Macro OFF
     )
 ]
 
@@ -437,8 +455,8 @@ class AlpacaPaperTrader:
         self.strategies = [StrategyInstance(cfg) for cfg in CONFIGS]
         
     async def run(self):
-        logger.info(f"🚀 Starting Alpaca Bot v7.0 GOD MODE (Dry: {self.dry_run})")
-        logger.info(f"Loaded {len(self.strategies)} Strategies.")
+        logger.info(f"🚀 Starting Alpaca Bot v8.1 HONEST GOD MODE (Dry: {self.dry_run})")
+        logger.info(f"Loaded {len(self.strategies)} Strategies (7-candle expiry).")
         
         self.stream.subscribe_bars(self._handle_bar, SYMBOL_NQ, SYMBOL_ES)
         await self.stream._run_forever()
