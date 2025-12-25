@@ -343,10 +343,22 @@ win_rate = total_trades > 0 ? (total_wins / total_trades * 100) : 0
 
 var table info = table.new(position.top_right, 2, 10, bgcolor=color.new(color.black, 70), frame_color=color.gray, frame_width=1)
 
+
 if barstate.islast
+    // Timeframe Validation
+    current_tf = timeframe.period
+    is_tf_ok = (is_nq and current_tf == "5") or (is_es and current_tf == "2")
+    
+    // Header
     table.cell(info, 0, 0, "GP v8", text_color=color.white, bgcolor=color.new(color.blue, 50))
-    mode_txt = is_nq ? (nq_mode == "Einstein (Aggressive)" ? "NQ EINSTEIN" : "NQ STANDARD") : "ES SHORT"
-    table.cell(info, 1, 0, mode_txt, text_color=is_nq ? c_bull : c_bear, bgcolor=color.new(color.blue, 50))
+    
+    // Status/Warning Cell
+    if is_tf_ok
+        mode_txt = is_nq ? (nq_mode == "Einstein (Aggressive)" ? "NQ EINSTEIN" : "NQ STANDARD") : "ES SHORT"
+        table.cell(info, 1, 0, mode_txt, text_color=is_nq ? c_bull : c_bear, bgcolor=color.new(color.blue, 50))
+    else
+        warn_txt = is_nq ? "⚠️ USE 5 MIN" : "⚠️ USE 2 MIN"
+        table.cell(info, 1, 0, warn_txt, text_color=color.white, bgcolor=color.new(color.red, 0))
     
     wr_color = win_rate >= 70 ? c_bull : (win_rate >= 50 ? c_pending : c_bear)
     table.cell(info, 0, 1, "Win Rate:", text_color=color.gray)

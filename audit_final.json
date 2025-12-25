@@ -1,0 +1,17 @@
+{
+  "NQ_Einstein": {
+    "wins": 0,
+    "same": 0,
+    "tot": 0
+  },
+  "NQ_Standard": {
+    "wins": 0,
+    "same": 0,
+    "tot": 0
+  },
+  "ES_Classic": {
+    "wins": 0,
+    "same": 0,
+    "tot": 0
+  }
+}
