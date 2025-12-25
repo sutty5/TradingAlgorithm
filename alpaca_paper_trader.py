@@ -250,18 +250,24 @@ class BarAggregator:
 # --- STRATEGY EXECUTOR ---
 
 class StrategyInstance:
-    """Runs logic for a SINGLE configuration."""
+    """Runs logic for a SINGLE configuration with trailing fibs."""
     def __init__(self, config: StrategyConfig):
         self.cfg = config
         self.state = TradeState.SCANNING
         self.ppi_data = {}
         self.age = 0 # Age of PPI in candles
+        self.pending_age = 0  # Age since BOS (for 7-candle expiry)
+        self.pending_order_id = None  # Track order ID for replacement
+        self.current_levels = {}  # Current entry/stop/target
         self.logger = logging.getLogger(f"STRAT_{config.name}")
         
     def _reset(self):
         self.state = TradeState.SCANNING
         self.ppi_data = {}
         self.age = 0
+        self.pending_age = 0
+        self.pending_order_id = None
+        self.current_levels = {}
         self.logger.info(f"♻️ Strategy {self.cfg.name} reset to SCANNING.")
 
     def on_candles(self, target: Candle, ref: Candle, macro_dir: int, equity: float = 100000.0, buying_power: float = 400000.0) -> Optional[Dict]:
@@ -269,13 +275,20 @@ class StrategyInstance:
         
         self.logger.debug(f"Tick: {target.close} / {ref.close} | Macro: {macro_dir}")
 
-        # Age check for PPI/Sweep states
+        # Age check for PPI/Sweep states (12 candle lookback)
         if self.state in [TradeState.PPI, TradeState.SWEEP]:
             self.age += 1
-            if self.age > self.cfg.expiry_candles:
-                self.logger.info(f"⏰ Strategy {self.cfg.name} Expired ({self.age} candles)")
+            if self.age > 12:  # PPI lookback
+                self.logger.info(f"⏰ Strategy {self.cfg.name} PPI Expired ({self.age} candles)")
                 self._reset()
                 return None
+
+        # Separate expiry for PENDING state (7 candles)
+        if self.state == TradeState.PENDING:
+            self.pending_age += 1
+            if self.pending_age > self.cfg.expiry_candles:  # 7 candles
+                self.logger.info(f"⏰ Strategy {self.cfg.name} Entry Expired ({self.pending_age} candles)")
+                return {'action': 'CANCEL', 'order_id': self.pending_order_id, 'strategy': self.cfg.name}
 
         if self.state == TradeState.SCANNING:
             return self._check_ppi(target, ref)
@@ -283,8 +296,8 @@ class StrategyInstance:
             return self._check_sweep(target, macro_dir)
         elif self.state == TradeState.SWEEP:
             return self._check_bos(target, equity, buying_power)
-        # Pending/Filled handled externally or reset? 
-        # For simple bot, auto-reset after fill logic passed up.
+        elif self.state == TradeState.PENDING:
+            return self._check_pending(target, equity, buying_power)
         return None
 
     def _check_ppi(self, target: Candle, ref: Candle):
@@ -342,55 +355,72 @@ class StrategyInstance:
         return None
 
     def _check_bos(self, target: Candle, equity: float, buying_power: float):
-        # Expiry Check (TODO: Implement proper BOS expiry logic if different from total age)
-        # Using broad aging for now.
+        """Check for Break of Structure - transitions to PENDING with initial order."""
         
         if self.cfg.is_short():
             # BOS = Break below PPI Low
             if target.close < self.ppi_data['low']:
                 self.logger.info(f"⚡ BOS Confirmed ({self.cfg.name})")
-                return self._create_signal(target, equity, buying_power)
+                # Set impulse origin for trailing
+                self.ppi_data['impulse_origin'] = target.low
+                self.pending_age = 0
+                signal = self._create_signal(target, equity, buying_power)
+                self.state = TradeState.PENDING
+                return signal
                 
         elif self.cfg.is_long():
             # BOS = Break above PPI High
             if target.close > self.ppi_data['high']:
                 self.logger.info(f"⚡ BOS Confirmed ({self.cfg.name})")
-                return self._create_signal(target, equity, buying_power)
+                # Set impulse origin for trailing
+                self.ppi_data['impulse_origin'] = target.high
+                self.pending_age = 0
+                signal = self._create_signal(target, equity, buying_power)
+                self.state = TradeState.PENDING
+                return signal
                 
         return None
-
-    def _create_signal(self, trigger_candle: Candle, equity: float, buying_power: float):
-        # Calc Levels
-        stop_level = self.ppi_data['sweep_extreme']
-        impulse = trigger_candle.low if self.cfg.is_short() else trigger_candle.high
+    
+    def _check_pending(self, target: Candle, equity: float, buying_power: float):
+        """Check for trailing fib updates during PENDING phase."""
         
-        # Range
-        # Short: Top (Stop) -> Bot (Impulse)
-        # Long: Bot (Stop) -> Top (Impulse)
+        fib_updated = False
+        
+        if self.cfg.is_short():
+            # Trail down: if price makes new low, update fib_0
+            if target.low < self.ppi_data['impulse_origin']:
+                self.logger.info(f"📉 Trailing Fib DOWN: {self.ppi_data['impulse_origin']:.2f} → {target.low:.2f}")
+                self.ppi_data['impulse_origin'] = target.low
+                fib_updated = True
+                
+        elif self.cfg.is_long():
+            # Trail up: if price makes new high, update fib_0
+            if target.high > self.ppi_data['impulse_origin']:
+                self.logger.info(f"📈 Trailing Fib UP: {self.ppi_data['impulse_origin']:.2f} → {target.high:.2f}")
+                self.ppi_data['impulse_origin'] = target.high
+                fib_updated = True
+        
+        if fib_updated:
+            # Recalculate levels and issue REPLACE order
+            signal = self._create_signal(target, equity, buying_power, is_replacement=True)
+            return signal
+        
+        return None
+
+    def _create_signal(self, trigger_candle: Candle, equity: float, buying_power: float, is_replacement: bool = False):
+        """Create order signal using current impulse_origin (supports trailing)."""
+        # Use impulse_origin for trailing fib support
+        stop_level = self.ppi_data['sweep_extreme']
+        impulse = self.ppi_data.get('impulse_origin', trigger_candle.low if self.cfg.is_short() else trigger_candle.high)
+        
+        # Range: from impulse origin to sweep extreme
         frange = abs(stop_level - impulse)
         
         if self.cfg.is_short():
             entry = impulse + (frange * self.cfg.fib_entry)
-            # Deep Stop Logic? 
-            # If Stop is 0.893, it means RISK is smaller.
-            # Stop Px = Top - (Range * 0.893)? 
-            # No, standard Fib retracement. 1.0 is full retrace to top.
-            # If we enter at 0.5 and stop at 0.893 (Deep), Stop is closer to Entry than 1.0
-            # Wait. 0 is Bottom (Impulse). 1 is Top (Exteme).
-            # Entry 0.5. Stop 0.893 is HIGHER up. 
-            # Correct.
             stop_px = impulse + (frange * self.cfg.fib_stop)
-            # Target Logic: Impulse (Low) is 0.0. Extension (0.1) is LOWER.
-            # Target = Impulse - (Range * fib_target)
             target_px = impulse - (frange * self.cfg.fib_target)
-            
-        else: # Long
-            # 0 is Top (Impulse). 1 is Bottom (Extreme).
-            # Entry = Top - (Range * 0.5)
-            # Stop Px = Top - (Range * StopFib) 
-            # Target Logic: Impulse (High) is 0.0. Extension (0.1) is HIGHER.
-            # Target = Impulse + (Range * fib_target)
-            
+        else:  # Long
             entry = impulse - (frange * self.cfg.fib_entry)
             stop_px = impulse - (frange * self.cfg.fib_stop)
             target_px = impulse + (frange * self.cfg.fib_target)
@@ -399,11 +429,9 @@ class StrategyInstance:
         risk_per_share = abs(entry - stop_px)
         qty = 0
         if risk_per_share > 0.01:
-            # Dynamic Risk Calculation
             risk_amount = (equity * RISK_PER_TRADE_PCT) / 100.0
             raw_qty = risk_amount / risk_per_share
             
-            # Capacity Check (Buying Power)
             notional = raw_qty * entry
             capacity = buying_power * BUYING_POWER_MARGIN
             
@@ -414,18 +442,27 @@ class StrategyInstance:
                 qty = int(raw_qty)
                 
             actual_risk = qty * risk_per_share
-            self.logger.info(f"💎 SIZING: Equity ${equity:,.2f} | Risk Amount ${risk_amount:,.2f} | Qty {qty} | Actual Risk ${actual_risk:,.2f}")
-            
-        self.state = TradeState.FILLED # Stop firing
+            self.logger.info(f"💎 SIZING: Equity ${equity:,.2f} | Risk ${risk_amount:,.2f} | Qty {qty} | Risk ${actual_risk:,.2f}")
+        
+        # Store current levels for comparison
+        self.current_levels = {
+            'entry': round(entry, 2),
+            'stop': round(stop_px, 2),
+            'target': round(target_px, 2)
+        }
+        
+        action = 'REPLACE' if is_replacement else 'NEW'
         
         return {
+            'action': action,
             'symbol': self.cfg.target_symbol,
             'side': self.cfg.direction,
             'qty': qty,
             'entry': round(entry, 2),
             'stop': round(stop_px, 2),
             'target': round(target_px, 2),
-            'strategy': self.cfg.name
+            'strategy': self.cfg.name,
+            'old_order_id': self.pending_order_id if is_replacement else None
         }
 
 
@@ -509,33 +546,69 @@ class AlpacaPaperTrader:
                             await self._execute(signal)
 
     async def _execute(self, signal):
-        logger.info(f"⚡ EXECUTION SIGNAL ({signal['strategy']}): {signal}")
+        """Execute order actions: NEW, REPLACE, or CANCEL."""
+        action = signal.get('action', 'NEW')
+        strategy_name = signal['strategy']
+        
+        logger.info(f"⚡ EXECUTION [{action}] ({strategy_name}): {signal}")
         
         if self.dry_run:
+            logger.info(f"📝 [DRY RUN] Would execute {action} for {strategy_name}")
+            # Still update order ID tracking for dry run
+            if action == 'NEW':
+                for s in self.strategies:
+                    if s.cfg.name == strategy_name:
+                        s.pending_order_id = f"dry_run_{strategy_name}_{signal['entry']}"
+            elif action == 'CANCEL':
+                for s in self.strategies:
+                    if s.cfg.name == strategy_name:
+                        s._reset()
             return
-            
-        req = LimitOrderRequest(
-            symbol=signal['symbol'],
-            qty=signal['qty'],
-            side=signal['side'],
-            time_in_force=TimeInForce.DAY,
-            limit_price=signal['entry'],
-            order_class=OrderClass.BRACKET,
-            take_profit=TakeProfitRequest(limit_price=signal['target']),
-            stop_loss=StopLossRequest(stop_price=signal['stop'])
-        )
+        
         try:
+            if action == 'CANCEL':
+                # Cancel existing order and reset
+                old_order_id = signal.get('order_id')
+                if old_order_id:
+                    logger.info(f"❌ Cancelling order {old_order_id}")
+                    self.client.cancel_order_by_id(old_order_id)
+                for s in self.strategies:
+                    if s.cfg.name == strategy_name:
+                        s._reset()
+                return
+                
+            elif action == 'REPLACE':
+                # Cancel old order first, then place new one
+                old_order_id = signal.get('old_order_id')
+                if old_order_id:
+                    logger.info(f"🔄 Replacing order {old_order_id}")
+                    try:
+                        self.client.cancel_order_by_id(old_order_id)
+                    except Exception as e:
+                        logger.warning(f"⚠️ Could not cancel old order: {e}")
+                # Fall through to place new order
+            
+            # Place NEW or REPLACE order (bracket order)
+            req = LimitOrderRequest(
+                symbol=signal['symbol'],
+                qty=signal['qty'],
+                side=signal['side'],
+                time_in_force=TimeInForce.DAY,
+                limit_price=signal['entry'],
+                order_class=OrderClass.BRACKET,
+                take_profit=TakeProfitRequest(limit_price=signal['target']),
+                stop_loss=StopLossRequest(stop_price=signal['stop'])
+            )
+            
             order = self.client.submit_order(req)
             logger.info(f"✅ Order Submitted: {order.id}")
-            # Reset Strategy State?
-            # StrategyInstance sets state to FILLED. 
-            # We need to reset it to SCANNING eventually?
-            # For this bot, let's keep it simple: restart bot or implement 'Reset' logic
-            # Implementing Quick Reset for continuous trading:
+            
+            # Update strategy with new order ID
             for s in self.strategies:
-                if s.cfg.name == signal['strategy']:
-                    s.state = TradeState.SCANNING
-                    logger.info(f"♻️ Strategy {s.cfg.name} reset to SCANNING.")
+                if s.cfg.name == strategy_name:
+                    s.pending_order_id = order.id
+                    logger.info(f"📌 Tracking order {order.id} for {strategy_name}")
+                    
         except Exception as e:
             logger.error(f"❌ Order Failed: {e}")
 
