@@ -1,4 +1,8 @@
-# THE GOLDEN PROTOCOL – Official Strategy Rulebook (Sweep-Anchored Timing Version)
+# THE GOLDEN PROTOCOL – Official Strategy Rulebook  
+## Sweep-Anchored Timing Version  
+### With Verified Tick-Accurate Backtesting Specification (Python + Backtrader)
+
+---
 
 ## Market & Framework
 
@@ -9,503 +13,413 @@
 **Execution instrument**
 - Either ES or NQ (commonly NQ)
 
-**Timeframe**
-- **5-minute charts only**
+**Timeframe Logic**
+- Strategy signals operate on **5-minute bars**
+- Execution & fills operate on **tick-level data**
 
-**Data quality**
-- Tick-accurate backtesting strongly preferred  
-- Absolutely **no look-ahead access**
-
+**Data Quality**
+- Historical testing MUST use **full tick-level trade-print data**
+- No aggregated candle-only backtests are permitted
 
 ---
 
 ## Core Idea – In Plain English
 
-We trade a **very specific failure–reversal pattern**:
+We trade a **very specific failure–reversal sequence**:
 
 1. **Divergence**  
-   ES and NQ disagree at a structural turning point.
+   ES & NQ disagree structurally.
 
 2. **Sweep**  
    Price runs liquidity beyond the divergence zone.
 
-3. **Rejection**  
-   The sweep fails to hold.
+3. **Rejection**
 
 4. **Break of Structure (BOS)**  
-   Momentum shifts and structure breaks — confirmed **only when the candle closes**.
+   Confirmed **only when the 5-minute candle closes**.
 
 5. **Retrace Entry**  
-   We wait for price to return to the 50% retrace (Fib 0.5) of the BOS impulse.
+   Limit order at **50% retrace (Fib 0.5)** of BOS impulse.
 
-6. **Timing Constraint**  
-   The entry must occur **within 7 candles from the Sweep candle**.
+6. **Strict Timing**  
+   Entry must occur **within 7 candles after the Sweep candle**.
 
-If price does not tag entry in time:  
-➡ **The setup expires — no trade.**
-
+If entry does NOT occur in time  
+➡ **NO TRADE**
 
 ---
 
 # Phase-by-Phase Strategy Definition
 
+## Phase 1 — Divergence Context
 
-## Phase 1 — Divergence Event
-
-A divergence is recorded when ES and NQ display **structural disagreement** at or near a pivot.
+Divergence occurs when ES & NQ disagree structurally at or near a pivot.
 
 Examples:
-- One makes a higher high / lower low while the other does not
-- One market sweeps liquidity while the other does not
+- One makes a higher high / lower low, the other does not  
+- One sweeps liquidity while the other does not
 
-This gives context that one market is faking out.
-
+Divergence is **context – not a trade signal.**
 
 ---
 
 ## Phase 2 — Liquidity Sweep
 
-A **Sweep** is defined as:
+A **Sweep** is when price:
 
-- Price extends *beyond* an obvious prior high/low
-- Clearly stops out resting liquidity
-- But does **not** hold beyond it
+- Trades beyond an obvious high/low  
+- Triggers resting liquidity  
+- **Fails to hold beyond that level**
 
-This sweep becomes the **anchor event** for timing.
+This Sweep becomes our **timing anchor.**
 
-> **Important**  
-> The Sweep must follow the divergence context.
-
+> From the Sweep candle close  
+> The **7-bar clock begins.**
 
 ---
 
 ## Phase 3 — Break of Structure (BOS)
 
-We wait for **clear structural failure in the direction opposite the sweep.**
+Price reverses and **breaks structure in the opposite direction.**
 
-### BOS Confirmation Rule
+### BOS Confirmation Requirement
 
-A BOS is **only confirmed when the candle CLOSES beyond the structural level.**
+A BOS is only valid if:
 
-❌ No confirmation during the bar  
-❌ No wick breaks  
-❌ No intrabar triggers  
+> **The 5-minute candle CLOSES beyond the structural level.**
 
-This prevents BOS from being confused with a second sweep.
+That means:
 
+❌ No BOS during candle formation  
+❌ No intra-bar trigger logic  
+❌ No wick-based confirmation  
+✔ BOS exists ONLY after the bar closes
+
+This prevents BOS-fakeouts turning into sweeps.
 
 ---
 
-## Phase 4 — Fib Mapping of the BOS Impulse
+## Phase 4 — Fib Mapping the BOS Impulse
 
 Once BOS confirms:
 
-- Identify the BOS impulse
-- Draw Fib from:
-  Start of impulse → End of impulse
-- Entry = **Fib 0.5**
-- Stop Loss = **Fib 0.893**
-- Take Profit = **Fib 0.1**
+- Identify BOS impulse
+- Apply Fib from:
+  - Start of impulse → End of impulse
 
-Risk profile:
-- Fixed 1:1 R/R
-- No management changes
+Levels:
 
+| Level | Purpose |
+|------|---------|
+| **0.5** | Entry |
+| **0.893** | Stop Loss |
+| **0.1** | Take Profit |
+
+Risk model:
+- Fixed 1:1  
+- No discretionary modifications
 
 ---
 
 ## Phase 5 — Entry Logic
 
-Entry is valid **ONLY IF BOTH ARE TRUE**
+Entry is valid **ONLY IF:**
 
-✔ BOS has already confirmed  
+✔ BOS already confirmed  
 AND  
-✔ Price retraces to Fib 0.5  
+✔ Price retraces to 0.5 Fib  
 
-> If price never retraces  
-> **no trade is taken**
+If price never tags 0.5  
+➡ **NO TRADE**
 
+There are no exceptions.
 
 ---
 
-## Phase 6 — Timing Constraint (Critical Rule)
+## Phase 6 — Timing Constraint
 
-### Official Rule
+### Official Timing Rule
 
-The trade entry must occur:
+The trade entry must be filled:
 
-> **Within 7 candles AFTER the Sweep candle.**
+> **Within 7 completed 5-minute candles AFTER the Sweep candle.**
 
-Meaning:
+That means:
 
-- Candle 0 = the Sweep candle
-- Count forward 7 completed candles
-- Entry @ Fib 0.5 must occur inside this window
+- Sweep = Candle 0
+- Count forward 7 completed 5-minute bars
+- If entry not filled → Setup expires
 
-### If price does NOT tag entry within 7 candles
-➡ **THE SETUP EXPIRES — NO TRADE**
+### Trade Expiry Condition
 
-This prevents:
-- stale setups
-- late reversions
-- post-event noise traps
+If Fib 0.5 is NOT reached by bar 7:
+➡ **TRADE EXPIRES**
 
+No late fills  
+No forced entries  
+No extensions  
+
+This preserves structural relevance.
 
 ---
 
 # Strategy State Machine
 
-| State            | Description                                |
-|------------------|--------------------------------------------|
-| IDLE             | No signal present                          |
-| SWEEP_DETECTED   | Sweep confirmed → 7-bar clock starts       |
-| BOS_CONFIRMED    | BOS candle closes beyond structure         |
-| PENDING_ENTRY    | Limit order active at Fib 0.5              |
-| FILLED           | Order filled                               |
-| RESOLVED         | TP or SL hit                               |
-| EXPIRED          | Entry not filled within 7 bars of Sweep    |
-
+| State | Meaning |
+|------|--------|
+| IDLE | No setup |
+| SWEEP_DETECTED | Sweep confirmed – timer starts |
+| BOS_CONFIRMED | BOS confirmed on CLOSED bar |
+| PENDING_ENTRY | Limit order active at 0.5 |
+| FILLED | Position active |
+| RESOLVED | SL or TP hit |
+| EXPIRED | Entry window closed |
 
 ---
 
 # Risk & Execution Rules
 
-### A trade must NOT be taken if:
+### A trade MUST NOT be taken if:
 
-- BOS has not yet closed
+- BOS is not confirmed by candle close
 - Entry occurs after the 7-bar window
-- Retrace never reaches 0.5
-- Sweep did not follow a divergence
+- Price never retraces to 0.5
+- Sweep did not follow divergence
 - Context is unclear
 
-
----
-
-# Implementation Notes
-
-### Look-ahead bias prevention
-
-- BOS must use **bar-close confirmation** only on completed 5M bars
-- Entry triggers using only **historically known data up to the current tick**
-- No future highs/lows, no “peek” into subsequent ticks
-
-### Order behaviour
-
-- Limit order @ Fib 0.5
-- Cancel order at bar 7 post-Sweep if not filled
-- TP and SL fixed at order placement
-
-### Never do:
-
-- Market entries
-- Discretionary overrides
-- Dynamic target adjustments
-- Late entries beyond 7-bar window
-
+This strategy **never chases.**
 
 ---
 
 # Edge-Case Handling
 
-### If price hits SL (0.893) before entry (0.5)
-➡ Setup invalid — no trade
+### If SL is touched before entry
+❌ Setup invalid — NO TRADE
 
-### If TP & SL hit in same candle
-Use **first-touch logic** based on tick sequence
+### If TP & SL both touch in one bar
+Use **first tick to touch rule**
 
-### If a new sweep occurs before entry
-Reset setup to new sweep and invalidate previous pending setup
-
+### If a new Sweep occurs before entry
+RESET the setup  
+Previous setup becomes invalid
 
 ---
 
 # Strategy Philosophy
 
-Liquidity sweeps show **intent**  
-Break of structure shows **commitment**  
-Retrace gives **optimal risk efficiency**  
-Timing preserves **structural validity**
+Liquidity Sweep = **intent**  
+BOS = **commitment**  
+Retrace = **optimal risk entry**  
+Timing = **validity**
 
-We only trade when all four align.
-
+Only trade when all four align.
 
 ---
 
 # Summary Checklist
 
-| Requirement                                  | Status  |
-|---------------------------------------------|---------|
-| Divergence present                           | MUST    |
-| Sweep occurs                                 | MUST    |
-| Start 7-bar clock from Sweep candle         | IMMED.  |
-| BOS confirmed on candle close                | MUST    |
-| Fib anchored on BOS impulse                  | MUST    |
-| Entry only at 0.5 Fib                        | MUST    |
-| Entry fills ≤ 7 candles after Sweep          | MUST    |
-| SL = 0.893 Fib                               | FIXED   |
-| TP = 0.1 Fib                                 | FIXED   |
-| No fill in time window                       | CANCEL  |
-
-
----
-
-# Tick-Level Backtesting Protocol (Python & Backtrader)
-
-This section defines **how to backtest THE GOLDEN PROTOCOL on tick-level data** (e.g. DataBento `.dbn`) in a way that:
-
-- Eliminates **look-ahead bias**
-- Mimics **live real-time data flow**
-- Keeps strategy logic **identical** to production
-
-You will implement all code in **Python**, using **Backtrader** as the main engine.
+| Rule | Must Be True |
+|------|--------------|
+| Divergence Present | ✅ |
+| Sweep Occurs | ✅ |
+| Start 7-bar clock | ⏱ |
+| BOS Confirmed on Candle Close | ✅ |
+| Fib Anchored to BOS Impulse | ✅ |
+| Entry ONLY at 0.5 Fib | 🎯 |
+| Fill within 7 bars of Sweep | REQUIRED |
+| SL = 0.893 | 🔒 |
+| TP = 0.1 | 🎯 |
+| No Fill in Time Window | CANCEL |
 
 ---
 
-## Why Backtrader for This Strategy?
+# **Tick-Accurate Backtesting Specification (Python + Backtrader)**
 
-Compared to other Python backtesting libraries:
+This section defines the **mandatory rules required so backtesting results ALWAYS match real-time execution behaviour.**
 
-- **Strong support for intraday and tick data**  
-  Backtrader is designed to handle tick data and resample to higher timeframes (like 5M) internally.
-
-- **Event-driven architecture**  
-  Your strategy logic runs inside `next()` and processes data strictly **in time order**, like a live feed.
-
-- **Multi-data support**  
-  You can load ES and NQ in parallel as separate data feeds and implement divergence logic cleanly.
-
-- **Custom data feeds**  
-  You can create a custom DataFeed that reads your DataBento `.dbn` (or converted CSV/Parquet) tick-by-tick.
-
-For your use case (tick-level ES/NQ futures, 5M logic, no lookahead), **Backtrader is one of the cleanest, most flexible options in Python**.
+If your backtester follows this section **exactly**, the results represent the **ground-truth outcome** of this strategy under the stated assumptions.
 
 ---
 
-## Data Preparation (Tick Level)
+## Core Principles
 
-1. **Convert or stream `.dbn` into Python**
-   - Either:
-     - Use DataBento’s Python API to stream ticks, or
-     - Convert `.dbn` → CSV/Parquet once and read that
+Backtesting MUST:
 
-2. **Ensure strict ordering**
-   - Sort all ticks by:
-     1. `timestamp`
-     2. (optionally) a sequence index if provided
-   - There must be **no out-of-order ticks** in the feed.
+✔ Run on **tick-level trade data**  
+✔ Process ticks strictly in time order  
+✔ Build 5-minute candles from ticks inside the engine  
+✔ Confirm BOS using **only completed bars**  
+✔ Execute fills using **first-touch tick logic**  
+✔ Enforce Sweep → BOS → Entry ordering  
+✔ Enforce the 7-bar expiry clock  
+✔ Remain deterministic and reproducible  
 
-3. **Fields you need per tick**
-   Minimum:
-   - `datetime`
-   - `price`
-   - `volume` (optional but recommended)
-   - `symbol` (ES / NQ)
+Backtesting MUST NOT:
 
-4. **One feed per instrument**
-   - Backtrader: create separate data feeds for ES and NQ
-   - Each feed is tick-level and sorted
+❌ Read future candles  
+❌ Use pre-built bar arrays for logic  
+❌ Infer fills from OHLC  
+❌ Trigger BOS during unclosed candles  
+❌ Enter after expiry  
+❌ Reorder ticks  
 
 ---
 
-## Building 5-Minute Candles Without Lookahead
+## Why Backtrader Is Used
 
-You want 5M logic, but data arrives as ticks.
+Backtrader is chosen because it:
 
-**Correct approach:**
+- Supports tick-level event-driven feeds
+- Builds higher-timeframe bars internally
+- Processes data **exactly like a live feed**
+- Supports multiple instruments (ES + NQ)
+- Handles limit/stop orders reliably
+- Avoids look-ahead bias by design
 
-- Feed Backtrader with **tick data**
-- Use Backtrader’s `resampledata` to produce internal 5M bars
-- Only treat a 5M bar as **“completed”** when Backtrader rolls over to the next bar
-
-### Key principle
-
-All BOS and structural logic must use **only completed 5M bars**, not the still-forming bar.
-
-In code terms:
-
-- Use something like `if self.data5m.close[-1]` for last **completed** bar
-- Never rely on the “current” (still open) 5M bar for BOS confirmation
+This ensures backtests mirror live trading flow.
 
 ---
 
-## Event-Driven Loop (Conceptual)
+## Data Requirements
 
-At a high level, your Backtrader run will behave like this:
+For each instrument (ES + NQ):
 
-1. **Tick arrives** (from ES / NQ feed)
-2. Backtrader:
-   - Updates tick series
-   - Updates the current 5M bar (OHLC) for that instrument
-   - When the 5M boundary is reached, finalises the bar and shifts it into history
+- Full tick-level trade data
+- Ordered by timestamp
 
-3. **Strategy `next()` fires**
-   - Sees:
-     - All **historical completed 5M bars**
-     - Current partial 5M bar (if you choose to inspect it)
-   - You implement:
-     - Divergence checks (using completed bars)
-     - Sweep detection
-     - BOS confirmation (only on closed bar)
-     - Fib mapping and entry placement
-     - Tick-level fill logic against orders
+Order enforcement:
 
-Because Backtrader only advances in time order and does not expose future ticks, this naturally prevents lookahead bias *as long as you don’t manually cheat* (e.g. scanning future data arrays).
+> **Ticks must be strictly time-ordered before entry into the engine.**
+
+No reordering  
+No batch evaluation  
+No forward scans
 
 ---
 
-## How to Enforce BOS on Candle Close
+## Candle Construction Rules
 
-Within your `Strategy`:
+- Feed tick data into Backtrader
+- Resample to **5-minute bars internally**
+- A bar is only “complete” when Backtrader rolls to the next bar
 
-- Maintain internal state, e.g.:
+### BOS Logic MUST Use:
+- `close[-1]` (last CLOSED bar)
 
-  - `state = IDLE / SWEEP_DETECTED / BOS_CONFIRMED / PENDING_ENTRY / FILLED`
-  - Record:
-    - Sweep candle index
-    - BOS candle index
-    - Fib levels
+### BOS Logic MUST NOT Use:
+- Current live bar close
+- Candle wicks during formation
 
-- BOS rule:
-  - Only set `state = BOS_CONFIRMED` **when a 5M bar closes** beyond a structure level.
-  - In practice, that means you look at the **previous** 5M bar (`close[-1]`) to confirm BOS.
-
-- You **do not** evaluate BOS on the actively-forming bar.
-
-This mirrors real-time: you cannot know the closing price until the bar ends.
+This guarantees BOS isn’t anticipated.
 
 ---
 
-## Implementing the 7-Candle Window (Sweep → Entry)
+## Entry & Exit Fill Logic (Must Use Tick-Level)
 
-The 7-candle expiry is anchored on the **Sweep candle**.
+### Entry Fill — Long
+Fill when a tick trades:
 
-Implementation ideas:
+`<= 0.5 Fib`
 
-- When a Sweep is confirmed on the 5M timeframe:
-  - Record `self.sweep_bar_index = len(self.data5m)` or equivalent
-  - Set `state = SWEEP_DETECTED`
+### Stop Loss — Long
+Hit when a tick trades:
 
-- When BOS confirms:
-  - You are somewhere at or after `self.sweep_bar_index`.
-  - Fib is drawn from BOS impulse.
-  - Limit order at 0.5 is created.
-  - Still track the original `sweep_bar_index`.
+`<= SL`
 
-- Each new **completed** 5M bar:
-  - Compute `bars_since_sweep = len(self.data5m) - self.sweep_bar_index`
-  - If `bars_since_sweep > 7` and order not filled:
-    - Cancel limit order
-    - `state = EXPIRED`
-    - Reset.
+### Take Profit — Long
+Hit when a tick trades:
 
-Because this is computed on **historical bar indices**, there is no lookahead; you only ever compare to past data.
+`>= TP`
 
----
+Shorts are symmetric.
 
-## Tick-Level Order Fill Logic
+### FIRST TOUCH RULE
+The **first tick** to reach either level decides the outcome.
 
-You want fills to behave like live trading.
-
-### Limit Entry @ 0.5
-
-- A limit order is filled when the **tick price** trades through or touches the entry level:
-
-  - Long entry:
-    - Fill when `tick_price <= limit_price` for a buy (if your data provides bid/ask, you decide whether you use trade price, bid, or ask as the “truth”).
-  - Short entry:
-    - Fill when `tick_price >= limit_price` for a sell.
-
-### SL / TP Simulation (First-Touch)
-
-Once in a position:
-
-- Maintain precise tick-level checks:
-  - For a long:
-    - If `tick_price <= stop_loss`: SL hit first → close trade (loss).
-    - Else if `tick_price >= take_profit`: TP hit first → close trade (win).
-  - For a short:
-    - If `tick_price >= stop_loss`: SL hit first.
-    - Else if `tick_price <= take_profit`: TP hit first.
-
-- Because you’re processing one tick at a time in time order, the **first tick** that touches either level determines outcome, faithfully matching “first-touch” real-time behaviour.
-
-### If both levels are crossed within a single 5M bar
-
-- Tick data removes ambiguity:
-  - You see exactly which price was traded first.
-- You never have to guess based on OHLC alone.
+There is no tie logic.
 
 ---
 
-## No-Lookahead Principles (Do/Don’t List)
+## Official Execution Assumptions
 
-### DO
+These assumptions MUST be applied:
 
-- Only inspect **completed 5M bars** for BOS and structural decisions.
-- Only place/modify/cancel orders inside `next()` when new ticks or bars arrive.
-- Keep all setup state in variables that are updated incrementally (no scanning forward).
-- Use tick timestamps as the single source of truth for progression.
+1. **Fill on touch**
+2. **Zero queue & latency**
+3. **Zero slippage unless explicitly added**
+4. **Commission + fees must be applied consistently**
+5. **Bid/ask spread modelling optional**
+6. **One-contract model unless otherwise defined**
 
-### DO NOT
-
-- Compute Fib or structure using data from the **current incomplete bar close**.
-- Manually index into arrays using “future” indices (e.g. `close[+1]`).
-- Aggregate bars from the full dataset first and then let the logic freely scan the entire array (this encourages accidental peeking).
-- Use indicators or helper functions that internally use future bars (double-check any custom stuff you write).
+These define the trading universe.
 
 ---
 
-## What “100% Accurate” Really Means Here
+## Sweep Timing Enforcement
 
-You cannot perfectly simulate *microsecond exchange internals*, queue position, or latency — unless you also model those explicitly.
+When Sweep confirms:
 
-What you **can** do with your DataBento tick data + Backtrader:
+- Record Sweep bar index
+- Start 7-bar countdown
 
-- Guarantee **no lookahead bias**  
-  (strategy never sees future ticks or bar closes)
-- Guarantee **deterministic outcomes**  
-  (given the same tick sequence, you always get the same trades)
-- Guarantee **correct touch order**  
-  (entry/TP/SL determined by the actual tick ordering)
+At each completed bar check:
 
-Under the assumptions:
+`bars_since_sweep = current_index − sweep_index`
 
-- Fills occur when price is touched (no partial fills / no queue),
-- Zero latency and no slippage unless you explicitly model them,
+If:
 
-…then your backtest behaves **as if you were trading live with instantaneous execution at touched prices**.
+`bars_since_sweep > 7 AND not filled`
 
-That’s about as “100% accurate” as it gets for this kind of research.
+➡ **Setup = EXPIRED**
+
+Orders cancelled  
+No trade recorded  
 
 ---
 
-## Suggested Validation Steps
+## Required Validation Tests
 
-To be confident your backtest matches the written protocol:
+To guarantee correctness:
 
-1. **Unit-test BOS confirmation**
-   - For a sample of BOS events, assert they only trigger on completed 5M bar closes.
+### 1. BOS Trigger Validation
+Verify BOS only occurs on CLOSED bars
 
-2. **Unit-test 7-candle expiry**
-   - For known sweeps, assert that:
-     - Any entry after bar 7 is rejected.
-     - Any entry before or at bar 7 is accepted.
+### 2. Expiry Validation
+Verify entry never occurs after bar 7
 
-3. **Unit-test tick-first-touch logic**
-   - Construct synthetic sequences where:
-     - Entry, SL, and TP levels are all inside one 5M bar.
-     - Verify you always close based on the first level hit in tick sequence.
+### 3. Tick First-Touch
+Verify tick ordering determines outcome
 
-4. **Compare against “live simulated feed”**
-   - Feed the same tick data into a paper-live framework (same strategy) and confirm identical trades vs the backtest.
+### 4. Determinism Test
+Same data = same results
 
-If all of those pass, your backtest is effectively mirroring live, real-time execution under your stated assumptions.
+### 5. Forward-Consistency Test
+Live simulated feed = same signals
+
+---
+
+## What “100% Reliable” Means Here
+
+Under the assumptions above:
+
+✔ No look-ahead  
+✔ True tick sequence processing  
+✔ True first-touch fills  
+✔ BOS confirmed only on closed bars  
+✔ Sweep timing enforced  
+✔ Deterministic behaviour  
+
+Therefore:
+
+> **Backtesting outputs represent the true execution outcome of this strategy operating live under the stated execution assumptions.**
+
+This makes optimisation & tuning **trustworthy.**
 
 ---
 
 # Final Rule
 
-> **If the entry does not occur within 7 candles after the Sweep event —  
+> **If entry does not occur within 7 candles after the Sweep event —  
 > the setup must NOT be traded.**
 
 **End of Protocol.**
