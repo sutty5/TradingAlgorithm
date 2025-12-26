@@ -10,7 +10,9 @@ To engineer the ultimate trading strategy day-trading **ES** and **NQ** futures.
 - **Target Win Rate**: 70%+
 - **Target R:R**: ~1:1 (flexible if expectancy is high)
 - **Priority**: High win rate and consistency over raw R:R.
-- **Methodology**: Tick-accurate backtesting using custom Python engine and Databento data.
+- **Methodology**: Tick-accurate backtesting using **Python + Backtrader**.
+    - **MANDATORY**: All backtests must use full tick-level data.
+    - **MANDATORY**: Zero lookahead bias (closed candles only for signals).
 
 ---
 
@@ -26,7 +28,9 @@ TradingStrategyDev/
 │   ├── strategy.py            <-- Golden Protocol Logic (State Machine)
 │   └── run.py                 <-- Execution Entry Point
 ├── data/                      <-- RAW DATA STORAGE
-│   └── databento_trades/      <-- .dbn files (Do not commit large files)
+│   ├── databento_trades/      <-- Original .dbn files (Archive)
+│   ├── es_trades.parquet      <-- OPTIMIZED ES TICK DATA (Sep-Dec 2025)
+│   └── nq_trades.parquet      <-- OPTIMIZED NQ TICK DATA (Sep-Dec 2025)
 ├── Golden_Protocol_Strategy/  <-- STRATEGY DOCUMENTATION
 │   ├── THE_GOLDEN_PROTOCOL... <-- Original Rulebook
 │   └── Backtesting/           <-- RESULTS & REVIEWS (Markdown Reports)
@@ -49,7 +53,7 @@ TradingStrategyDev/
 ---
 
 ## 4. Pitfalls & Learnings (Knowledge Base)
-- **Data Loading**: Databento `.dbn` files often require **Instrument Mapping**. The `loader.py` must map `instrument_id` (int) to symbol (str) using the file's `mappings` metadata. Code is currently stable; do not revert to simplistic loading without checking metadata.
+- **Data Loading**: We have converted `.dbn` to `.parquet` for performance. Use `data/es_trades.parquet` and `data/nq_trades.parquet`.
 - **BOS Logic**: Break of Structure must be confirmed on **Candle Close** (5m). Do not trigger intra-candle.
 - **Timing Rule**: The "7-candle expiry" is a hard rule. The custom engine enforces this.
 - **Entry Logic**: "First Touch" execution. If the tick touches the limit, it fills.
